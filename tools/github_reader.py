@@ -2,6 +2,8 @@ import re
 from github import Github
 from github.Auth import Token
 from google.colab import userdata
+from typing import Dict, Optional, List
+
 
 def conection(repositorio: str):
     GITHUB_TOKEN = userdata.get('github_token')
@@ -10,55 +12,55 @@ def conection(repositorio: str):
     return g.get_repo(repositorio)
 
 
-MAPEAMENTO_TIPO_EXTENSOES = {
-    "terraform": [".tf", ".tfvars"],
-    "python": [".py"],
-    "cloudformation": [".json", ".yaml", ".yml"],
-    "ansible": [".yml", ".yaml"],
-    "docker": ["Dockerfile"], 
-}
+def obter_extensoes_por_tipo(tipo_de_analise: str, mapeamento: Optional[Dict[str, List[str]]] = None) -> Optional[List[str]]:
+    """
+    Permite extensão do mapeamento de tipos/extensões sem modificar o código-fonte.
+    """
+    if mapeamento is None:
+        mapeamento = {
+            "terraform": [".tf", ".tfvars"],
+            "python": [".py"],
+            "cloudformation": [".json", ".yaml", ".yml"],
+            "ansible": [".yml", ".yaml"],
+            "docker": ["Dockerfile"],
+        }
+    return mapeamento.get(tipo_de_analise.lower())
 
-def _leitura_recursiva_com_debug(repo, extensoes, path="", arquivos_do_repo=None):
 
+def filtrar_extensao(conteudo_path: str, extensoes: Optional[List[str]]) -> bool:
+    """
+    Função separada para filtrar arquivos por extensão ou nome.
+    """
+    if extensoes is None:
+        return True
+    return any(conteudo_path.endswith(ext) for ext in extensoes) or any(ext == conteudo_path.split('/')[-1] for ext in extensoes)
+
+
+def leitura_recursiva(repo, extensoes, path="", arquivos_do_repo=None):
+    """
+    Função recursiva para leitura de arquivos, separando logging e filtragem.
+    """
     if arquivos_do_repo is None:
         arquivos_do_repo = {}
-
     try:
-        # Tentando obter o conteúdo do caminho
         conteudos = repo.get_contents(path)
-
         for conteudo in conteudos:
             if conteudo.type == "dir":
-                _leitura_recursiva_com_debug(repo, extensoes, conteudo.path, arquivos_do_repo)
+                leitura_recursiva(repo, extensoes, conteudo.path, arquivos_do_repo)
             else:
-                # Lógica de decisão de leitura
-                ler_o_arquivo = False
-                if extensoes is None:
-                    ler_o_arquivo = True
-                else:
-                    if any(conteudo.path.endswith(ext) for ext in extensoes) or conteudo.name in extensoes:
-                        ler_o_arquivo = True
-                    
-                if ler_o_arquivo:
+                if filtrar_extensao(conteudo.path, extensoes):
                     try:
                         codigo = conteudo.decoded_content.decode('utf-8')
                         arquivos_do_repo[conteudo.path] = codigo
                     except Exception as e:
                         print(f"DEBUG: ERRO na decodificação de '{conteudo.path}': {e}")
-
     except Exception as e:
         print(e)
-        
     return arquivos_do_repo
 
 
-def main(repo, tipo_de_analise: str):
-
+def main(repo, tipo_de_analise: str, mapeamento: Optional[Dict[str, List[str]]] = None):
     repositorio_final = conection(repositorio=repo)
-
-    extensoes_alvo = MAPEAMENTO_TIPO_EXTENSOES.get(tipo_de_analise.lower())
-
-    arquivos_encontrados = _leitura_recursiva_com_debug(repositorio_final, 
-                                                        extensoes=extensoes_alvo)
-  
+    extensoes_alvo = obter_extensoes_por_tipo(tipo_de_analise, mapeamento)
+    arquivos_encontrados = leitura_recursiva(repositorio_final, extensoes=extensoes_alvo)
     return arquivos_encontrados
