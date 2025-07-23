@@ -1,8 +1,7 @@
 import os
 from openai import OpenAI
-from typing import Dict
+from typing import Dict, Optional
 from google.colab import userdata
-
 
 OPENAI_API_KEY = userdata.get('OPENAI_API_KEY')
 if not OPENAI_API_KEY:
@@ -11,7 +10,9 @@ if not OPENAI_API_KEY:
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 def carregar_prompt(tipo_analise: str) -> str:
-    """Carrega o conteúdo do arquivo de prompt correspondente."""
+    """
+    Carrega o conteúdo do arquivo de prompt correspondente.
+    """
     caminho_prompt = os.path.join(os.path.dirname(__file__), 'prompts', f'{tipo_analise}.md')
     try:
         with open(caminho_prompt, 'r', encoding='utf-8') as f:
@@ -24,20 +25,21 @@ def executar_analise_llm(
     codigo: str,
     analise_extra: str,
     model_name: str,
-    max_token_out: int
+    max_token_out: int,
+    openai_client_override: Optional[OpenAI] = None
 ) -> str:
-    
-    
+    """
+    Executa análise LLM desacoplada do cliente OpenAI (para facilitar mocks).
+    """
     prompt_sistema = carregar_prompt(tipo_analise)
-
     mensagens = [
         {"role": "system", "content": prompt_sistema},
         {'role': 'user', 'content': codigo},
         {'role': 'user', 'content': f'Instruções extras do usuário a serem consideradas na análise: {analise_extra}' if analise_extra.strip() else 'Nenhuma instrução extra fornecida pelo usuário.'}
     ]
-
+    client = openai_client_override if openai_client_override else openai_client
     try:
-        response = openai_client.chat.completions.create(
+        response = client.chat.completions.create(
             model=model_name,
             messages=mensagens,
             temperature=0.5,
@@ -45,7 +47,6 @@ def executar_analise_llm(
         )
         conteudo_resposta = response.choices[0].message.content.strip()
         return conteudo_resposta
-        
     except Exception as e:
         print(f"ERRO: Falha na chamada à API da OpenAI para análise '{tipo_analise}'. Causa: {e}")
         raise RuntimeError(f"Erro ao comunicar com a OpenAI: {e}") from e
