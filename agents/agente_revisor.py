@@ -1,66 +1,139 @@
 from typing import Optional, Dict, Any
-from tools import github_reader
-from tools.revisor_geral import executar_analise_llm 
+from tools.github_reader import GitHubRepositoryReader
+from tools.revisor_geral import LLMAnalyzer
 
 
-modelo_llm = 'gpt-4.1'
-max_tokens_saida = 3000
+class AnalysisStrategy:
+    """
+    Strategy base para diferentes tipos de análise.
+    """
+    def analyze(self, codigo: str, instrucoes_extras: str, model_name: str, max_token_out: int) -> Any:
+        raise NotImplementedError
 
-analises_validas = ["design", "pentest", "seguranca", "terraform"]
 
-def code_from_repo(repositorio: str,
-                   tipo_analise: str):
+class DesignAnalysisStrategy(AnalysisStrategy):
+    def __init__(self, analyzer: LLMAnalyzer):
+        self.analyzer = analyzer
 
-    try:
-      print('Iniciando a leitura do repositório: '+ repositorio)
-      codigo_para_analise = github_reader.main(repo=repositorio,
-                                                 tipo_de_analise=tipo_analise)
-      
-      return codigo_para_analise
-
-    except Exception as e:
-        raise RuntimeError(f"Falha ao executar a análise de '{tipo_analise}': {e}") from e
-
-def validation(tipo_analise: str,
-               repositorio: Optional[str] = None,
-               codigo: Optional[str] = None):
-
-  if tipo_analise not in analises_validas:
-        raise ValueError(f"Tipo de análise '{tipo_analise}' é inválido. Válidos: {analises_validas}")
-
-  if repositorio is None and codigo is None:
-        raise ValueError("Erro: É obrigatório fornecer 'repositorio' ou 'codigo'.")
-
-  if codigo is None:
-    codigo_para_analise = code_from_repo(tipo_analise=tipo_analise,
-                                         repositorio=repositorio)
-
-  else:
-    codigo_para_analise = codigo
-
-  return codigo_para_analise
-
-def main(tipo_analise: str,
-         repositorio: Optional[str] = None,
-         codigo: Optional[str] = None,
-         instrucoes_extras: str = "",
-         model_name: str = modelo_llm,
-         max_token_out: int = max_tokens_saida)-> Dict[str, Any]:
-
-  codigo_para_analise = validation(tipo_analise=tipo_analise,
-                                   repositorio=repositorio,
-                                   codigo=codigo)
-                                   
-  if not codigo_para_analise:
-    return ({"tipo_analise": tipo_analise, "resultado": 'Não foi fornecido nenhum código para análise'})
-    
-  else: 
-    resultado = executar_analise_llm(
-            tipo_analise=tipo_analise,
-            codigo=str(codigo_para_analise),
+    def analyze(self, codigo: str, instrucoes_extras: str, model_name: str, max_token_out: int) -> Any:
+        return self.analyzer.executar_analise_llm(
+            tipo_analise="design",
+            codigo=codigo,
             analise_extra=instrucoes_extras,
             model_name=model_name,
             max_token_out=max_token_out
         )
-        
-    return {"tipo_analise": tipo_analise, "resultado": resultado}
+
+
+class PentestAnalysisStrategy(AnalysisStrategy):
+    def __init__(self, analyzer: LLMAnalyzer):
+        self.analyzer = analyzer
+
+    def analyze(self, codigo: str, instrucoes_extras: str, model_name: str, max_token_out: int) -> Any:
+        return self.analyzer.executar_analise_llm(
+            tipo_analise="pentest",
+            codigo=codigo,
+            analise_extra=instrucoes_extras,
+            model_name=model_name,
+            max_token_out=max_token_out
+        )
+
+
+class SecurityAnalysisStrategy(AnalysisStrategy):
+    def __init__(self, analyzer: LLMAnalyzer):
+        self.analyzer = analyzer
+
+    def analyze(self, codigo: str, instrucoes_extras: str, model_name: str, max_token_out: int) -> Any:
+        return self.analyzer.executar_analise_llm(
+            tipo_analise="seguranca",
+            codigo=codigo,
+            analise_extra=instrucoes_extras,
+            model_name=model_name,
+            max_token_out=max_token_out
+        )
+
+
+class TerraformAnalysisStrategy(AnalysisStrategy):
+    def __init__(self, analyzer: LLMAnalyzer):
+        self.analyzer = analyzer
+
+    def analyze(self, codigo: str, instrucoes_extras: str, model_name: str, max_token_out: int) -> Any:
+        return self.analyzer.executar_analise_llm(
+            tipo_analise="terraform",
+            codigo=codigo,
+            analise_extra=instrucoes_extras,
+            model_name=model_name,
+            max_token_out=max_token_out
+        )
+
+
+class AnalysisService:
+    """
+    Classe de orquestração para análise, separando responsabilidades.
+    """
+    ANALYSIS_STRATEGY_MAP = {
+        "design": DesignAnalysisStrategy,
+        "pentest": PentestAnalysisStrategy,
+        "seguranca": SecurityAnalysisStrategy,
+        "terraform": TerraformAnalysisStrategy,
+    }
+
+    def __init__(self, repo_reader=None, analyzer=None):
+        self.repo_reader = repo_reader or GitHubRepositoryReader()
+        self.analyzer = analyzer or LLMAnalyzer()
+
+    def get_strategy(self, tipo_analise: str) -> AnalysisStrategy:
+        strategy_cls = self.ANALYSIS_STRATEGY_MAP.get(tipo_analise)
+        if not strategy_cls:
+            raise ValueError(f"Tipo de análise '{tipo_analise}' é inválido. Válidos: {list(self.ANALYSIS_STRATEGY_MAP.keys())}")
+        return strategy_cls(self.analyzer)
+
+    def get_code(self, repositorio: Optional[str], tipo_analise: str, codigo: Optional[str]) -> Any:
+        if repositorio:
+            return self.repo_reader.read_repository(repo=repositorio, tipo_de_analise=tipo_analise)
+        elif codigo:
+            return codigo
+        else:
+            raise ValueError("Erro: É obrigatório fornecer 'repositorio' ou 'codigo'.")
+
+    def executar_analise(self,
+                         tipo_analise: str,
+                         repositorio: Optional[str] = None,
+                         codigo: Optional[str] = None,
+                         instrucoes_extras: str = "",
+                         model_name: str = "gpt-4.1",
+                         max_token_out: int = 3000) -> Dict[str, Any]:
+        strategy = self.get_strategy(tipo_analise)
+        codigo_para_analise = self.get_code(repositorio, tipo_analise, codigo)
+        if not codigo_para_analise:
+            return {"tipo_analise": tipo_analise, "resultado": "Não foi fornecido nenhum código para análise"}
+        resultado = strategy.analyze(
+            codigo=str(codigo_para_analise),
+            instrucoes_extras=instrucoes_extras,
+            model_name=model_name,
+            max_token_out=max_token_out
+        )
+        return {"tipo_analise": tipo_analise, "resultado": resultado}
+
+
+# Instância padrão do serviço para integração backward compatible
+analysis_service = AnalysisService()
+
+
+def executar_analise(tipo_analise: str,
+                     repositorio: Optional[str] = None,
+                     codigo: Optional[str] = None,
+                     instrucoes_extras: str = "",
+                     model_name: str = "gpt-4.1",
+                     max_token_out: int = 3000) -> Dict[str, Any]:
+    """
+    Função de entrada para manter compatibilidade. Encaminha para o serviço desacoplado.
+    """
+    return analysis_service.executar_analise(
+        tipo_analise=tipo_analise,
+        repositorio=repositorio,
+        codigo=codigo,
+        instrucoes_extras=instrucoes_extras,
+        model_name=model_name,
+        max_token_out=max_token_out
+    )
