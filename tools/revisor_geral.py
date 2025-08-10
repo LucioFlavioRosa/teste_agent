@@ -1,51 +1,54 @@
-import os
-from openai import OpenAI
-from typing import Dict
-from google.colab import userdata
+import openai
 
 
-OPENAI_API_KEY = userdata.get('OPENAI_API_KEY')
-if not OPENAI_API_KEY:
-    raise ValueError("A chave da API da OpenAI não foi encontrada. Defina a variável de ambiente OPENAI_API_KEY.")
+def carregar_prompt(tipo_analise):
+    """
+    Carrega o prompt correspondente ao tipo de análise.
+    Args:
+        tipo_analise (str): Tipo de análise.
+    Returns:
+        str: Prompt carregado.
+    """
+    # Exemplo: carregar de arquivo ou dicionário
+    prompts = {
+        'qualidade': 'Analise a qualidade do código...'
+    }
+    return prompts.get(tipo_analise, '')
 
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
-def carregar_prompt(tipo_analise: str) -> str:
-    """Carrega o conteúdo do arquivo de prompt correspondente."""
-    caminho_prompt = os.path.join(os.path.dirname(__file__), 'prompts', f'{tipo_analise}.md')
-    try:
-        with open(caminho_prompt, 'r', encoding='utf-8') as f:
-            return f.read()
-    except FileNotFoundError:
-        raise ValueError(f"Arquivo de prompt para a análise '{tipo_analise}' não encontrado em: {caminho_prompt}")
-
-def executar_analise_llm(
-    tipo_analise: str,
-    codigo: str,
-    analise_extra: str,
-    model_name: str,
-    max_token_out: int
-) -> str:
-    
-    
-    prompt_sistema = carregar_prompt(tipo_analise)
-
+def construir_mensagens(repositorio, codigo, prompt):
+    """
+    Constrói as mensagens para o modelo LLM.
+    Args:
+        repositorio (str): Nome do repositório.
+        codigo (dict): Dicionário de arquivos e conteúdos.
+        prompt (str): Prompt base.
+    Returns:
+        list: Lista de mensagens para o modelo.
+    """
     mensagens = [
-        {"role": "system", "content": prompt_sistema},
-        {'role': 'user', 'content': codigo},
-        {'role': 'user', 'content': f'Instruções extras do usuário a serem consideradas na análise: {analise_extra}' if analise_extra.strip() else 'Nenhuma instrução extra fornecida pelo usuário.'}
+        {"role": "system", "content": prompt},
+        {"role": "user", "content": f"Repositório: {repositorio}. Código: {list(codigo.keys())}"}
     ]
+    return mensagens
 
-    try:
-        response = openai_client.chat.completions.create(
-            model=model_name,
-            messages=mensagens,
-            temperature=0.5,
-            max_tokens=max_token_out
-        )
-        conteudo_resposta = response.choices[0].message.content.strip()
-        return conteudo_resposta
-        
-    except Exception as e:
-        print(f"ERRO: Falha na chamada à API da OpenAI para análise '{tipo_analise}'. Causa: {e}")
-        raise RuntimeError(f"Erro ao comunicar com a OpenAI: {e}") from e
+
+def executar_analise_llm(tipo_analise, repositorio, codigo, openai_client=None):
+    """
+    Executa a análise LLM usando o cliente OpenAI.
+    Args:
+        tipo_analise (str): Tipo de análise.
+        repositorio (str): Nome do repositório.
+        codigo (dict): Dicionário de arquivos e conteúdos.
+        openai_client (module, opcional): Cliente OpenAI injetável para testes.
+    Returns:
+        dict: Resultado da análise.
+    """
+    prompt = carregar_prompt(tipo_analise)
+    mensagens = construir_mensagens(repositorio, codigo, prompt)
+    client = openai_client if openai_client else openai
+    resposta = client.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=mensagens
+    )
+    return {"resposta": resposta.choices[0].message['content']}
