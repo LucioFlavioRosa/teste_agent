@@ -1,64 +1,39 @@
-import re
+import os
 from github import Github
-from github.Auth import Token
-from google.colab import userdata
-
-def conection(repositorio: str):
-    GITHUB_TOKEN = userdata.get('github_token')
-    auth = Token(GITHUB_TOKEN)
-    g = Github(auth=auth)
-    return g.get_repo(repositorio)
-
 
 MAPEAMENTO_TIPO_EXTENSOES = {
-    "terraform": [".tf", ".tfvars"],
-    "python": [".py"],
-    "cloudformation": [".json", ".yaml", ".yml"],
-    "ansible": [".yml", ".yaml"],
-    "docker": ["Dockerfile"], 
+    'design': ['.py', '.js', '.ts', '.java', '.cs', '.go'],
+    'pentest': ['.py', '.js', '.ts', '.java', '.cs', '.go'],
+    'documentacao': ['.md', '.rst', '.txt'],
 }
 
-def _leitura_recursiva_com_debug(repo, extensoes, path="", arquivos_do_repo=None):
+def ler_arquivos_do_repositorio(repositorio, tipo_analise, token_github):
+    """
+    Lê arquivos do repositório filtrando pelas extensões do tipo de análise.
 
-    if arquivos_do_repo is None:
-        arquivos_do_repo = {}
+    Args:
+        repositorio (str): URL do repositório.
+        tipo_analise (str): Tipo de análise para filtrar extensões.
+        token_github (str): Token de autenticação do Github.
 
-    try:
-        # Tentando obter o conteúdo do caminho
-        conteudos = repo.get_contents(path)
-
-        for conteudo in conteudos:
-            if conteudo.type == "dir":
-                _leitura_recursiva_com_debug(repo, extensoes, conteudo.path, arquivos_do_repo)
-            else:
-                # Lógica de decisão de leitura
-                ler_o_arquivo = False
-                if extensoes is None:
-                    ler_o_arquivo = True
-                else:
-                    if any(conteudo.path.endswith(ext) for ext in extensoes) or conteudo.name in extensoes:
-                        ler_o_arquivo = True
-                    
-                if ler_o_arquivo:
-                    try:
-                        codigo = conteudo.decoded_content.decode('utf-8')
-                        arquivos_do_repo[conteudo.path] = codigo
-                    except Exception as e:
-                        print(f"DEBUG: ERRO na decodificação de '{conteudo.path}': {e}")
-
-    except Exception as e:
-        print(e)
-        
-    return arquivos_do_repo
+    Returns:
+        dict: Dicionário com caminhos e conteúdos dos arquivos lidos.
+    """
+    github = Github(token_github)
+    repo = github.get_repo(repositorio)
+    extensoes = MAPEAMENTO_TIPO_EXTENSOES.get(tipo_analise, [])
+    arquivos = {}
+    _leitura_recursiva(repo.get_contents(""), extensoes, arquivos)
+    return arquivos
 
 
-def main(repo, tipo_de_analise: str):
-
-    repositorio_final = conection(repositorio=repo)
-
-    extensoes_alvo = MAPEAMENTO_TIPO_EXTENSOES.get(tipo_de_analise.lower())
-
-    arquivos_encontrados = _leitura_recursiva_com_debug(repositorio_final, 
-                                                        extensoes=extensoes_alvo)
-  
-    return arquivos_encontrados
+def _leitura_recursiva(conteudo, extensoes, arquivos):
+    """
+    Função recursiva para percorrer diretórios e coletar arquivos.
+    """
+    for item in conteudo:
+        if item.type == 'dir':
+            _leitura_recursiva(item.repo.get_contents(item.path), extensoes, arquivos)
+        else:
+            if any(item.path.endswith(ext) for ext in extensoes):
+                arquivos[item.path] = item.decoded_content.decode('utf-8')
