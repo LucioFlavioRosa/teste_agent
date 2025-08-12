@@ -3,12 +3,11 @@ from openai import OpenAI
 from typing import Dict
 from google.colab import userdata
 
-
-OPENAI_API_KEY = userdata.get('OPENAI_API_KEY')
-if not OPENAI_API_KEY:
-    raise ValueError("A chave da API da OpenAI não foi encontrada. Defina a variável de ambiente OPENAI_API_KEY.")
-
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
+def get_openai_api_key():
+    api_key = userdata.get('OPENAI_API_KEY')
+    if not api_key:
+        raise ValueError("A chave da API da OpenAI não foi encontrada. Defina a variável de ambiente OPENAI_API_KEY.")
+    return api_key
 
 def carregar_prompt(tipo_analise: str) -> str:
     """Carrega o conteúdo do arquivo de prompt correspondente."""
@@ -24,18 +23,18 @@ def executar_analise_llm(
     codigo: str,
     analise_extra: str,
     model_name: str,
-    max_token_out: int
+    max_token_out: int,
+    openai_client: OpenAI = None
 ) -> str:
-    
-    
     prompt_sistema = carregar_prompt(tipo_analise)
-
     mensagens = [
         {"role": "system", "content": prompt_sistema},
         {'role': 'user', 'content': codigo},
         {'role': 'user', 'content': f'Instruções extras do usuário a serem consideradas na análise: {analise_extra}' if analise_extra.strip() else 'Nenhuma instrução extra fornecida pelo usuário.'}
     ]
-
+    if openai_client is None:
+        api_key = get_openai_api_key()
+        openai_client = OpenAI(api_key=api_key)
     try:
         response = openai_client.chat.completions.create(
             model=model_name,
@@ -45,7 +44,6 @@ def executar_analise_llm(
         )
         conteudo_resposta = response.choices[0].message.content.strip()
         return conteudo_resposta
-        
     except Exception as e:
         print(f"ERRO: Falha na chamada à API da OpenAI para análise '{tipo_analise}'. Causa: {e}")
         raise RuntimeError(f"Erro ao comunicar com a OpenAI: {e}") from e
