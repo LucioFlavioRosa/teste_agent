@@ -1,66 +1,55 @@
 from typing import Optional, Dict, Any
 from tools import github_reader
-from tools.revisor_geral import executar_analise_llm 
+from tools.revisor_geral import executar_analise_llm
+from tools.validator import AnaliseValidator
+from tools.llm_client import LLMClient
 
 
-modelo_llm = 'gpt-4.1'
-max_tokens_saida = 3000
+MODELO_LLM = 'gpt-4.1'
+MAX_TOKENS_SAIDA = 3000
 
-analises_validas = ["design", "pentest", "seguranca", "terraform"]
 
-def code_from_repo(repositorio: str,
-                   tipo_analise: str):
-
+def code_from_repo(repositorio: str, tipo_analise: str) -> Dict[str, str]:
+    """Obtém o código do repositório para análise."""
+    print(f'Iniciando a leitura do repositório: {repositorio}')
     try:
-      print('Iniciando a leitura do repositório: '+ repositorio)
-      codigo_para_analise = github_reader.main(repo=repositorio,
-                                                 tipo_de_analise=tipo_analise)
-      
-      return codigo_para_analise
-
+        codigo_para_analise = github_reader.main(repo=repositorio, tipo_de_analise=tipo_analise)
+        return codigo_para_analise
     except Exception as e:
         raise RuntimeError(f"Falha ao executar a análise de '{tipo_analise}': {e}") from e
 
-def validation(tipo_analise: str,
-               repositorio: Optional[str] = None,
-               codigo: Optional[str] = None):
 
-  if tipo_analise not in analises_validas:
-        raise ValueError(f"Tipo de análise '{tipo_analise}' é inválido. Válidos: {analises_validas}")
+def validation(tipo_analise: str, repositorio: Optional[str] = None, codigo: Optional[str] = None) -> Dict[str, str]:
+    """Valida os parâmetros de entrada para a análise."""
+    AnaliseValidator.validar_tipo_analise(tipo_analise)
+    AnaliseValidator.validar_origem_codigo(repositorio, codigo)
+    if codigo is None:
+        return code_from_repo(tipo_analise=tipo_analise, repositorio=repositorio)
+    else:
+        return codigo
 
-  if repositorio is None and codigo is None:
-        raise ValueError("Erro: É obrigatório fornecer 'repositorio' ou 'codigo'.")
 
-  if codigo is None:
-    codigo_para_analise = code_from_repo(tipo_analise=tipo_analise,
-                                         repositorio=repositorio)
-
-  else:
-    codigo_para_analise = codigo
-
-  return codigo_para_analise
-
-def main(tipo_analise: str,
-         repositorio: Optional[str] = None,
-         codigo: Optional[str] = None,
-         instrucoes_extras: str = "",
-         model_name: str = modelo_llm,
-         max_token_out: int = max_tokens_saida)-> Dict[str, Any]:
-
-  codigo_para_analise = validation(tipo_analise=tipo_analise,
-                                   repositorio=repositorio,
-                                   codigo=codigo)
-                                   
-  if not codigo_para_analise:
-    return ({"tipo_analise": tipo_analise, "resultado": 'Não foi fornecido nenhum código para análise'})
-    
-  else: 
-    resultado = executar_analise_llm(
+def executar_analise(tipo_analise: str,
+                     repositorio: Optional[str] = None,
+                     codigo: Optional[str] = None,
+                     instrucoes_extras: str = "",
+                     model_name: str = MODELO_LLM,
+                     max_token_out: int = MAX_TOKENS_SAIDA) -> Dict[str, Any]:
+    """
+    Orquestra o processo de análise: valida entradas, obtém código e executa a análise LLM.
+    """
+    codigo_para_analise = validation(tipo_analise=tipo_analise,
+                                     repositorio=repositorio,
+                                     codigo=codigo)
+    if not codigo_para_analise:
+        return {"tipo_analise": tipo_analise, "resultado": 'Não foi fornecido nenhum código para análise'}
+    else:
+        llm_client = LLMClient()
+        resultado = llm_client.executar_analise_llm(
             tipo_analise=tipo_analise,
             codigo=str(codigo_para_analise),
             analise_extra=instrucoes_extras,
             model_name=model_name,
             max_token_out=max_token_out
         )
-        
-    return {"tipo_analise": tipo_analise, "resultado": resultado}
+        return {"tipo_analise": tipo_analise, "resultado": resultado}
