@@ -3,15 +3,15 @@ from github import Github
 from github.Auth import Token
 from google.colab import userdata
 
-def conection(repositorio: str):
+def conection(repositorio: str) -> object:
     """
-    Realiza a conexão autenticada ao repositório GitHub informado.
+    Estabelece conexão autenticada com o repositório GitHub.
 
     Args:
         repositorio (str): Nome do repositório no formato 'usuario/repositorio'.
 
     Returns:
-        github.Repository.Repository: Objeto do repositório GitHub.
+        object: Instância do repositório GitHub.
     """
     GITHUB_TOKEN = userdata.get('github_token')
     auth = Token(GITHUB_TOKEN)
@@ -26,18 +26,18 @@ MAPEAMENTO_TIPO_EXTENSOES = {
     "docker": ["Dockerfile"],
 }
 
-def _leitura_recursiva_com_debug(repo, extensoes, path="", arquivos_do_repo=None):
+def _leitura_recursiva_com_debug(repo, extensoes, path="", arquivos_do_repo=None) -> dict:
     """
     Lê recursivamente arquivos do repositório, filtrando por extensões.
 
     Args:
-        repo (github.Repository.Repository): Objeto do repositório GitHub.
-        extensoes (list or None): Lista de extensões de arquivos a filtrar.
-        path (str): Caminho relativo dentro do repositório.
-        arquivos_do_repo (dict): Dicionário acumulador dos arquivos encontrados.
+        repo: Instância do repositório GitHub.
+        extensoes (list): Lista de extensões alvo.
+        path (str): Caminho relativo.
+        arquivos_do_repo (dict): Dicionário acumulador.
 
     Returns:
-        dict: Dicionário com caminhos e conteúdos dos arquivos filtrados.
+        dict: Dicionário de arquivos e conteúdos.
     """
     if arquivos_do_repo is None:
         arquivos_do_repo = {}
@@ -63,19 +63,18 @@ def _leitura_recursiva_com_debug(repo, extensoes, path="", arquivos_do_repo=None
         print(e)
     return arquivos_do_repo
 
-def main(repo, tipo_de_analise: str):
+def main(repo: str, tipo_de_analise: str) -> dict:
     """
-    Função principal que recupera arquivos de um repositório GitHub conforme o tipo de análise.
+    Executa a leitura do repositório e retorna os arquivos relevantes.
 
     Args:
         repo (str): Nome do repositório GitHub.
-        tipo_de_analise (str): Tipo de análise ('python', 'terraform', etc.).
+        tipo_de_analise (str): Tipo de análise para filtrar extensões.
 
     Returns:
-        dict: Dicionário com caminhos e conteúdos dos arquivos relevantes.
+        dict: Dicionário de arquivos e conteúdos filtrados.
     """
     repositorio_final = conection(repositorio=repo)
     extensoes_alvo = MAPEAMENTO_TIPO_EXTENSOES.get(tipo_de_analise.lower())
-    arquivos_encontrados = _leitura_recursiva_com_debug(repositorio_final,
-                                                       extensoes=extensoes_alvo)
+    arquivos_encontrados = _leitura_recursiva_com_debug(repositorio_final, extensoes=extensoes_alvo)
     return arquivos_encontrados
