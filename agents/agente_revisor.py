@@ -7,19 +7,16 @@ max_tokens_saida = 3000
 
 analises_validas = ["design", "pentest", "seguranca", "terraform"]
 
-def code_from_repo(repositorio: str, tipo_analise: str):
+def code_from_repo(repositorio: str, tipo_analise: str) -> Dict[str, str]:
     """
-    Lê o código-fonte de um repositório do GitHub para análise.
+    Lê o código do repositório GitHub de acordo com o tipo de análise.
 
     Args:
         repositorio (str): Nome do repositório no formato 'usuario/repositorio'.
-        tipo_analise (str): Tipo de análise a ser realizada.
+        tipo_analise (str): Tipo de análise desejada (ex: 'design', 'pentest').
 
     Returns:
-        dict: Dicionário com caminhos de arquivos como chaves e conteúdos como valores.
-
-    Raises:
-        RuntimeError: Se houver falha na leitura do repositório.
+        Dict[str, str]: Dicionário de arquivos e seus respectivos conteúdos.
     """
     try:
         print('Iniciando a leitura do repositório: ' + repositorio)
@@ -29,22 +26,17 @@ def code_from_repo(repositorio: str, tipo_analise: str):
         raise RuntimeError(
             f"Falha ao executar a análise de '{tipo_analise}': {e}") from e
 
-def validation(tipo_analise: str,
-               repositorio: Optional[str] = None,
-               codigo: Optional[str] = None):
+def validation(tipo_analise: str, repositorio: Optional[str] = None, codigo: Optional[str] = None) -> Dict[str, str]:
     """
-    Valida os parâmetros de entrada para análise e recupera o código-fonte adequado.
+    Valida os parâmetros de entrada e obtém o código para análise.
 
     Args:
         tipo_analise (str): Tipo de análise a ser realizada.
-        repositorio (Optional[str]): Nome do repositório GitHub, se aplicável.
-        codigo (Optional[str]): Código-fonte em string, se aplicável.
+        repositorio (Optional[str]): Repositório GitHub a ser analisado.
+        codigo (Optional[str]): Código-fonte fornecido diretamente.
 
     Returns:
-        str or dict: Código-fonte ou estrutura de arquivos para análise.
-
-    Raises:
-        ValueError: Se os parâmetros forem inválidos.
+        Dict[str, str]: Código a ser analisado.
     """
     if tipo_analise not in analises_validas:
         raise ValueError(
@@ -57,25 +49,25 @@ def validation(tipo_analise: str,
         codigo_para_analise = codigo
     return codigo_para_analise
 
-def main(tipo_analise: str,
-         repositorio: Optional[str] = None,
-         codigo: Optional[str] = None,
-         instrucoes_extras: str = "",
-         model_name: str = modelo_llm,
-         max_token_out: int = max_tokens_saida) -> Dict[str, Any]:
+def executar_analise(tipo_analise: str,
+                     repositorio: Optional[str] = None,
+                     codigo: Optional[str] = None,
+                     instrucoes_extras: str = "",
+                     model_name: str = modelo_llm,
+                     max_token_out: int = max_tokens_saida) -> Dict[str, Any]:
     """
-    Função principal que orquestra a análise de código-fonte conforme o tipo solicitado.
+    Orquestra o fluxo de análise, validando parâmetros, obtendo código e executando a análise via LLM.
 
     Args:
-        tipo_analise (str): Tipo de análise ('design', 'pentest', etc.).
+        tipo_analise (str): Tipo de análise ('design', 'pentest', etc).
         repositorio (Optional[str]): Nome do repositório GitHub.
-        codigo (Optional[str]): Código-fonte em string.
-        instrucoes_extras (str): Instruções adicionais para a análise.
-        model_name (str): Nome do modelo LLM a ser utilizado.
-        max_token_out (int): Limite máximo de tokens para a resposta.
+        codigo (Optional[str]): Código-fonte direto.
+        instrucoes_extras (str): Instruções adicionais para análise.
+        model_name (str): Nome do modelo LLM.
+        max_token_out (int): Limite de tokens para resposta.
 
     Returns:
-        dict: Resultado da análise estruturado por tipo e conteúdo.
+        Dict[str, Any]: Resultado da análise.
     """
     codigo_para_analise = validation(tipo_analise=tipo_analise,
                                      repositorio=repositorio,
