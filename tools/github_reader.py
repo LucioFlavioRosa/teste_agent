@@ -2,11 +2,29 @@ import re
 from github import Github
 from github.Auth import Token
 from google.colab import userdata
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def get_github_token():
+    """Obtém o token do Github de forma desacoplada."""
+    return userdata.get('github_token')
+
+
+def autenticar_github(token: str):
+    """Autentica no Github usando o token fornecido."""
+    auth = Token(token)
+    return Github(auth=auth)
+
 
 def conection(repositorio: str):
-    GITHUB_TOKEN = userdata.get('github_token')
-    auth = Token(GITHUB_TOKEN)
-    g = Github(auth=auth)
+    """Retorna objeto de repositório autenticado."""
+    token = get_github_token()
+    if not token:
+        logger.error("Token do Github não encontrado.")
+        raise ValueError("Token do Github não encontrado.")
+    g = autenticar_github(token)
     return g.get_repo(repositorio)
 
 
@@ -15,50 +33,48 @@ MAPEAMENTO_TIPO_EXTENSOES = {
     "python": [".py"],
     "cloudformation": [".json", ".yaml", ".yml"],
     "ansible": [".yml", ".yaml"],
-    "docker": ["Dockerfile"], 
+    "docker": ["Dockerfile"],
 }
 
-def _leitura_recursiva_com_debug(repo, extensoes, path="", arquivos_do_repo=None):
 
+def filtrar_extensao(conteudo, extensoes):
+    """Decide se deve ler o arquivo pelo nome/extensão."""
+    if extensoes is None:
+        return True
+    return any(conteudo.path.endswith(ext) for ext in extensoes) or conteudo.name in extensoes
+
+
+def _leitura_recursiva(repo, extensoes, path="", arquivos_do_repo=None):
+    """
+    Lê arquivos recursivamente do repositório Github, filtrando por extensão.
+    """
     if arquivos_do_repo is None:
         arquivos_do_repo = {}
-
     try:
-        # Tentando obter o conteúdo do caminho
         conteudos = repo.get_contents(path)
-
         for conteudo in conteudos:
             if conteudo.type == "dir":
-                _leitura_recursiva_com_debug(repo, extensoes, conteudo.path, arquivos_do_repo)
+                _leitura_recursiva(repo, extensoes, conteudo.path, arquivos_do_repo)
             else:
-                # Lógica de decisão de leitura
-                ler_o_arquivo = False
-                if extensoes is None:
-                    ler_o_arquivo = True
-                else:
-                    if any(conteudo.path.endswith(ext) for ext in extensoes) or conteudo.name in extensoes:
-                        ler_o_arquivo = True
-                    
-                if ler_o_arquivo:
+                if filtrar_extensao(conteudo, extensoes):
                     try:
                         codigo = conteudo.decoded_content.decode('utf-8')
                         arquivos_do_repo[conteudo.path] = codigo
                     except Exception as e:
-                        print(f"DEBUG: ERRO na decodificação de '{conteudo.path}': {e}")
-
+                        logger.warning("Erro na decodificação de '%s': %s", conteudo.path, e)
     except Exception as e:
-        print(e)
-        
+        logger.error("Erro ao ler conteúdo do repositório: %s", e)
     return arquivos_do_repo
 
 
 def main(repo, tipo_de_analise: str):
-
+    """
+    Interface principal para leitura de arquivos do repositório Github.
+    """
     repositorio_final = conection(repositorio=repo)
-
     extensoes_alvo = MAPEAMENTO_TIPO_EXTENSOES.get(tipo_de_analise.lower())
-
-    arquivos_encontrados = _leitura_recursiva_com_debug(repositorio_final, 
-                                                        extensoes=extensoes_alvo)
-  
+    arquivos_encontrados = _leitura_recursiva(
+        repositorio_final,
+        extensoes=extensoes_alvo
+    )
     return arquivos_encontrados
