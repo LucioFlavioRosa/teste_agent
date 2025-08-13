@@ -7,61 +7,47 @@ Original file is located at
     https://colab.research.google.com/drive/11ZTKLHaPzrTy8tcu3IYFSCefnnVtvIEF
 """
 
-#!pip install PyGithub
-
-from agents import agente_revisor
-
-nome_do_repositorio = "LucioFlavioRosa/agent-vinna"
-
-resposta_desing = agente_revisor.executar_analise(tipo_analise='pentest', repositorio=nome_do_repositorio)
-#resposta_desing = agente_revisor_design.main(repositorio=nome_do_repositorio)
-#resposta_seguranca = agente_revisor_seguranca.main(repositorio=nome_do_repositorio)
-#resposta_pen_test = agente_pen_test.main(repositorio=nome_do_repositorio)
-
-print(resposta_desing['resultado'])
-
-# app.py
 from flask import Flask, request, jsonify
 from agents import agente_revisor
 import traceback
 
-
 app = Flask(__name__)
 
-
-@app.route('/executar_analise', methods=['POST'])
-def rodar_analise():
-
-    print("INFO: Requisição recebida no endpoint /executar_analise")
-
+def parse_request_data():
     dados = request.get_json()
-
     if not dados:
-        return jsonify({"erro": "Corpo da requisição inválido ou não é um JSON."}), 400
-
+        return None, {"erro": "Corpo da requisição inválido ou não é um JSON."}, 400
     tipo_analise = dados.get('tipo_analise')
     repositorio = dados.get('repositorio')
     codigo = dados.get('codigo')
     instrucoes_extras = dados.get('instrucoes_extras', '')
-
     if not tipo_analise:
-        return jsonify({"erro": "O parâmetro 'tipo_analise' é obrigatório."}), 400
+        return None, {"erro": "O parâmetro 'tipo_analise' é obrigatório."}, 400
     if not repositorio and not codigo:
-        return jsonify({"erro": "É obrigatório fornecer pelo menos um dos parâmetros: 'repositorio' ou 'codigo'."}), 400
+        return None, {"erro": "É obrigatório fornecer pelo menos um dos parâmetros: 'repositorio' ou 'codigo'."}, 400
+    return {
+        "tipo_analise": tipo_analise,
+        "repositorio": repositorio,
+        "codigo": codigo,
+        "instrucoes_extras": instrucoes_extras
+    }, None, None
 
+@app.route('/executar_analise', methods=['POST'])
+def rodar_analise():
+    print("INFO: Requisição recebida no endpoint /executar_analise")
+    req_data, error_response, error_code = parse_request_data()
+    if error_response:
+        return jsonify(error_response), error_code
     try:
-        print(f"INFO: Iniciando análise do tipo '{tipo_analise}'...")
-
-        resultado = agente_revisor.executar_analise(
-            tipo_analise=tipo_analise,
-            repositorio=repositorio,
-            codigo=codigo,
-            instrucoes_extras=instrucoes_extras
+        print(f"INFO: Iniciando análise do tipo '{req_data['tipo_analise']}'...")
+        resultado = agente_revisor.main(
+            tipo_analise=req_data['tipo_analise'],
+            repositorio=req_data['repositorio'],
+            codigo=req_data['codigo'],
+            instrucoes_extras=req_data['instrucoes_extras']
         )
-
         print("INFO: Análise concluída com sucesso.")
         return jsonify(resultado), 200
-
     except Exception as e:
         print(f"ERRO: A execução do agente falhou. Causa: {e}")
         traceback.print_exc()
@@ -71,7 +57,5 @@ def rodar_analise():
 def index():
     return "<h1>Servidor de Agentes de IA está no ar!</h1><p>Use o endpoint <b>/executar_analise</b> via POST para rodar uma análise.</p>"
 
-
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
-
