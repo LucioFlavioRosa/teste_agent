@@ -1,11 +1,35 @@
-import re
+import os
+import logging
 from github import Github
 from github.Auth import Token
-from google.colab import userdata
+
+try:
+    from google.colab import userdata as colab_userdata  # fallback opcional
+except Exception:  # noqa: BLE001 - qualquer falha significa ausência do Colab
+    colab_userdata = None
+
+
+logger = logging.getLogger(__name__)
+
+
+def _get_github_token() -> str:
+    """Obtém o token do GitHub da variável de ambiente, com fallback opcional ao Colab."""
+    token = os.getenv('GITHUB_TOKEN')
+    if not token and colab_userdata:
+        try:
+            token = colab_userdata.get('github_token')
+            if token:
+                logger.debug("Token do GitHub obtido via google.colab.userdata.")
+        except Exception:  # noqa: BLE001
+            token = None
+    if not token:
+        raise ValueError("GitHub token não encontrado. Defina a variável de ambiente GITHUB_TOKEN.")
+    return token
+
 
 def conection(repositorio: str):
-    GITHUB_TOKEN = userdata.get('github_token')
-    auth = Token(GITHUB_TOKEN)
+    token = _get_github_token()
+    auth = Token(token)
     g = Github(auth=auth)
     return g.get_repo(repositorio)
 
@@ -17,6 +41,7 @@ MAPEAMENTO_TIPO_EXTENSOES = {
     "ansible": [".yml", ".yaml"],
     "docker": ["Dockerfile"], 
 }
+
 
 def _leitura_recursiva_com_debug(repo, extensoes, path="", arquivos_do_repo=None):
 
@@ -38,18 +63,19 @@ def _leitura_recursiva_com_debug(repo, extensoes, path="", arquivos_do_repo=None
                 else:
                     if any(conteudo.path.endswith(ext) for ext in extensoes) or conteudo.name in extensoes:
                         ler_o_arquivo = True
-                    
+                
                 if ler_o_arquivo:
                     try:
                         codigo = conteudo.decoded_content.decode('utf-8')
                         arquivos_do_repo[conteudo.path] = codigo
-                    except Exception as e:
-                        print(f"DEBUG: ERRO na decodificação de '{conteudo.path}': {e}")
+                    except Exception as e:  # noqa: BLE001
+                        logger.debug("Erro na decodificação de '%s': %s", conteudo.path, e)
 
-    except Exception as e:
-        print(e)
+    except Exception:
+        logger.exception("Erro ao ler conteúdo do caminho '%s' no repositório.", path)
         
     return arquivos_do_repo
+
 
 
 def main(repo, tipo_de_analise: str):
