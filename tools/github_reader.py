@@ -1,10 +1,18 @@
 import re
+import os
+try:
+    from google.colab import userdata
+except ImportError:
+    userdata = None
 from github import Github
 from github.Auth import Token
-from google.colab import userdata
 
-def conection(repositorio: str):
-    GITHUB_TOKEN = userdata.get('github_token')
+def conection(repositorio: str, token: Optional[str] = None):
+    GITHUB_TOKEN = token or os.environ.get('GITHUB_TOKEN')
+    if not GITHUB_TOKEN and userdata:
+        GITHUB_TOKEN = userdata.get('github_token')
+    if not GITHUB_TOKEN:
+        raise ValueError("Token do GitHub não encontrado. Defina a variável de ambiente GITHUB_TOKEN.")
     auth = Token(GITHUB_TOKEN)
     g = Github(auth=auth)
     return g.get_repo(repositorio)
@@ -51,12 +59,13 @@ def _leitura_recursiva_com_debug(repo, extensoes, path="", arquivos_do_repo=None
         
     return arquivos_do_repo
 
+def main(repo, tipo_de_analise: str, token: Optional[str] = None):
 
-def main(repo, tipo_de_analise: str):
-
-    repositorio_final = conection(repositorio=repo)
+    repositorio_final = conection(repositorio=repo, token=token)
 
     extensoes_alvo = MAPEAMENTO_TIPO_EXTENSOES.get(tipo_de_analise.lower())
+    if extensoes_alvo is None:
+        raise ValueError(f"Tipo de análise desconhecido: {tipo_de_analise}")
 
     arquivos_encontrados = _leitura_recursiva_com_debug(repositorio_final, 
                                                         extensoes=extensoes_alvo)
