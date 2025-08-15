@@ -1,11 +1,15 @@
-import re
-from github import Github
-from github.Auth import Token
-from google.colab import userdata
+import os
+import logging
+from github import Github, Auth
+from github.GithubException import GithubException
 
-def conection(repositorio: str):
-    GITHUB_TOKEN = userdata.get('github_token')
-    auth = Token(GITHUB_TOKEN)
+logger = logging.getLogger(__name__)
+
+def connection(repositorio: str):
+    token = os.environ.get('GITHUB_TOKEN')
+    if not token:
+        raise ValueError("Variável de ambiente GITHUB_TOKEN não definida. Defina GITHUB_TOKEN com um token de acesso do GitHub.")
+    auth = Auth.Token(token)
     g = Github(auth=auth)
     return g.get_repo(repositorio)
 
@@ -24,37 +28,37 @@ def _leitura_recursiva_com_debug(repo, extensoes, path="", arquivos_do_repo=None
         arquivos_do_repo = {}
 
     try:
-        # Tentando obter o conteúdo do caminho
         conteudos = repo.get_contents(path)
+    except GithubException as e:
+        logger.error("Falha ao listar conteúdo no repositório %s em '%s': %s", getattr(repo, "full_name", "desconhecido"), path, e)
+        raise
 
-        for conteudo in conteudos:
-            if conteudo.type == "dir":
-                _leitura_recursiva_com_debug(repo, extensoes, conteudo.path, arquivos_do_repo)
+    for conteudo in conteudos:
+        if conteudo.type == "dir":
+            _leitura_recursiva_com_debug(repo, extensoes, conteudo.path, arquivos_do_repo)
+        else:
+            ler_o_arquivo = False
+            if extensoes is None:
+                ler_o_arquivo = True
             else:
-                # Lógica de decisão de leitura
-                ler_o_arquivo = False
-                if extensoes is None:
+                if any(conteudo.path.endswith(ext) for ext in extensoes) or conteudo.name in extensoes:
                     ler_o_arquivo = True
-                else:
-                    if any(conteudo.path.endswith(ext) for ext in extensoes) or conteudo.name in extensoes:
-                        ler_o_arquivo = True
-                    
-                if ler_o_arquivo:
-                    try:
-                        codigo = conteudo.decoded_content.decode('utf-8')
-                        arquivos_do_repo[conteudo.path] = codigo
-                    except Exception as e:
-                        print(f"DEBUG: ERRO na decodificação de '{conteudo.path}': {e}")
-
-    except Exception as e:
-        print(e)
-        
+                
+            if ler_o_arquivo:
+                try:
+                    codigo = conteudo.decoded_content.decode('utf-8')
+                    arquivos_do_repo[conteudo.path] = codigo
+                except UnicodeDecodeError as e:
+                    logger.warning("Falha ao decodificar arquivo '%s' no caminho '%s': %s", conteudo.name, conteudo.path, e)
+                except Exception as e:
+                    logger.warning("Erro inesperado ao ler arquivo '%s' no caminho '%s': %s", conteudo.name, conteudo.path, e)
+    
     return arquivos_do_repo
 
 
 def main(repo, tipo_de_analise: str):
 
-    repositorio_final = conection(repositorio=repo)
+    repositorio_final = connection(repositorio=repo)
 
     extensoes_alvo = MAPEAMENTO_TIPO_EXTENSOES.get(tipo_de_analise.lower())
 
