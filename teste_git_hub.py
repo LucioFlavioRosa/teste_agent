@@ -65,7 +65,7 @@ def rodar_analise():
     except Exception as e:
         print(f"ERRO: A execução do agente falhou. Causa: {e}")
         traceback.print_exc()
-        return jsonify({"erro": f"Ocorreu um erro interno no servidor: {e}"}), 500
+        return jsonify({"erro": "Ocorreu um erro interno no servidor."}), 500
 
 @app.route("/")
 def index():
@@ -73,5 +73,5 @@ def index():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=False)
 
