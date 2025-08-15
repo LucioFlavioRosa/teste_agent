@@ -64,3 +64,22 @@ def main(tipo_analise: str,
         )
         
     return {"tipo_analise": tipo_analise, "resultado": resultado}
+
+def executar_analise(tipo_analise: str,
+                     repositorio: Optional[str] = None,
+                     codigo: Optional[str] = None,
+                     instrucoes_extras: str = "",
+                     model_name: str = modelo_llm,
+                     max_token_out: int = max_tokens_saida) -> Dict[str, Any]:
+    """
+    Função de compatibilidade que delega para main(...).
+    Mantida para não quebrar chamadas existentes que usam 'executar_analise'.
+    """
+    return main(
+        tipo_analise=tipo_analise,
+        repositorio=repositorio,
+        codigo=codigo,
+        instrucoes_extras=instrucoes_extras,
+        model_name=model_name,
+        max_token_out=max_token_out
+    )
