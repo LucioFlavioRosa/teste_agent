@@ -1,14 +1,22 @@
 import os
 from openai import OpenAI
-from typing import Dict
-from google.colab import userdata
+from typing import Dict, Optional
 
 
-OPENAI_API_KEY = userdata.get('OPENAI_API_KEY')
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 if not OPENAI_API_KEY:
     raise ValueError("A chave da API da OpenAI não foi encontrada. Defina a variável de ambiente OPENAI_API_KEY.")
 
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
+openai_client = None
+
+def obter_cliente_openai(api_key: Optional[str] = None) -> OpenAI:
+    global openai_client
+    if openai_client is None:
+        api_key = api_key or OPENAI_API_KEY
+        if not api_key:
+            raise ValueError("API key para OpenAI não fornecida.")
+        openai_client = OpenAI(api_key=api_key)
+    return openai_client
 
 def carregar_prompt(tipo_analise: str) -> str:
     """Carrega o conteúdo do arquivo de prompt correspondente."""
@@ -24,7 +32,8 @@ def executar_analise_llm(
     codigo: str,
     analise_extra: str,
     model_name: str,
-    max_token_out: int
+    max_token_out: int,
+    cliente_openai: Optional[OpenAI] = None
 ) -> str:
     
     
@@ -36,8 +45,10 @@ def executar_analise_llm(
         {'role': 'user', 'content': f'Instruções extras do usuário a serem consideradas na análise: {analise_extra}' if analise_extra.strip() else 'Nenhuma instrução extra fornecida pelo usuário.'}
     ]
 
+    cliente_openai = cliente_openai or obter_cliente_openai()
+
     try:
-        response = openai_client.chat.completions.create(
+        response = cliente_openai.chat.completions.create(
             model=model_name,
             messages=mensagens,
             temperature=0.5,
