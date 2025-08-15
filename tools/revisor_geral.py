@@ -1,14 +1,7 @@
 import os
 from openai import OpenAI
-from typing import Dict
-from google.colab import userdata
+from typing import Dict, Callable, Optional
 
-
-OPENAI_API_KEY = userdata.get('OPENAI_API_KEY')
-if not OPENAI_API_KEY:
-    raise ValueError("A chave da API da OpenAI não foi encontrada. Defina a variável de ambiente OPENAI_API_KEY.")
-
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 def carregar_prompt(tipo_analise: str) -> str:
     """Carrega o conteúdo do arquivo de prompt correspondente."""
@@ -19,16 +12,26 @@ def carregar_prompt(tipo_analise: str) -> str:
     except FileNotFoundError:
         raise ValueError(f"Arquivo de prompt para a análise '{tipo_analise}' não encontrado em: {caminho_prompt}")
 
+
+def _get_openai_client(api_key: Optional[str] = None) -> OpenAI:
+    key = api_key or os.environ.get('OPENAI_API_KEY')
+    if not key:
+        raise ValueError("A chave da API da OpenAI não foi encontrada. Defina a variável de ambiente OPENAI_API_KEY ou forneça via parâmetro.")
+    return OpenAI(api_key=key)
+
+
 def executar_analise_llm(
     tipo_analise: str,
     codigo: str,
     analise_extra: str,
     model_name: str,
-    max_token_out: int
+    max_token_out: int,
+    openai_client: Optional[OpenAI] = None,
+    prompt_loader: Callable[[str], str] = carregar_prompt,
+    api_key: Optional[str] = None,
 ) -> str:
-    
-    
-    prompt_sistema = carregar_prompt(tipo_analise)
+    """Executa a análise usando LLM, com criação lazy do cliente e injeções para teste."""
+    prompt_sistema = prompt_loader(tipo_analise)
 
     mensagens = [
         {"role": "system", "content": prompt_sistema},
@@ -37,7 +40,8 @@ def executar_analise_llm(
     ]
 
     try:
-        response = openai_client.chat.completions.create(
+        client = openai_client or _get_openai_client(api_key=api_key)
+        response = client.chat.completions.create(
             model=model_name,
             messages=mensagens,
             temperature=0.5,
@@ -45,7 +49,7 @@ def executar_analise_llm(
         )
         conteudo_resposta = response.choices[0].message.content.strip()
         return conteudo_resposta
-        
+
     except Exception as e:
         print(f"ERRO: Falha na chamada à API da OpenAI para análise '{tipo_analise}'. Causa: {e}")
         raise RuntimeError(f"Erro ao comunicar com a OpenAI: {e}") from e
