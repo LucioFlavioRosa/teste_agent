@@ -1,64 +1,73 @@
-import re
+from typing import Dict, Optional, List
 from github import Github
 from github.Auth import Token
-from google.colab import userdata
-
-def conection(repositorio: str):
-    GITHUB_TOKEN = userdata.get('github_token')
-    auth = Token(GITHUB_TOKEN)
-    g = Github(auth=auth)
-    return g.get_repo(repositorio)
+from core.ports import IFileFilter, ICodeRepositoryReader
 
 
+# Mapeamento mantido para conveniência; pode ser configurado externamente
 MAPEAMENTO_TIPO_EXTENSOES = {
     "terraform": [".tf", ".tfvars"],
     "python": [".py"],
     "cloudformation": [".json", ".yaml", ".yml"],
     "ansible": [".yml", ".yaml"],
-    "docker": ["Dockerfile"], 
+    "docker": ["Dockerfile"],
 }
 
-def _leitura_recursiva_com_debug(repo, extensoes, path="", arquivos_do_repo=None):
 
-    if arquivos_do_repo is None:
-        arquivos_do_repo = {}
+class FileFilterByExtensions(IFileFilter):
+    """Estratégia de filtragem por extensões e/ou nomes de arquivos."""
 
-    try:
-        # Tentando obter o conteúdo do caminho
-        conteudos = repo.get_contents(path)
+    def __init__(self, extensoes: Optional[List[str]] = None) -> None:
+        self._extensoes = extensoes
+
+    def should_read(self, path: str, name: str) -> bool:
+        if self._extensoes is None:
+            return True
+        # Lê por nome exato ou por extensão
+        for ext in self._extensoes:
+            if name == ext:
+                return True
+            if ext.startswith('.') and path.endswith(ext):
+                return True
+        return False
+
+
+class GithubRepositoryReader(ICodeRepositoryReader):
+    """Leitor de repositórios GitHub desacoplado de segredos e configuração externa."""
+
+    def __init__(self, token: Optional[str] = None, github_client: Optional[Github] = None) -> None:
+        if github_client is not None:
+            self._client = github_client
+        else:
+            if token:
+                self._client = Github(auth=Token(token))
+            else:
+                # Cliente sem autenticação (rate-limitado)
+                self._client = Github()
+
+    def read_repo(self, repositorio: str, file_filter: IFileFilter) -> Dict[str, str]:
+        repo = self._client.get_repo(repositorio)
+        arquivos: Dict[str, str] = {}
+        self._read_recursive(repo, '', file_filter, arquivos)
+        return arquivos
+
+    def _read_recursive(self, repo, path: str, file_filter: IFileFilter, out: Dict[str, str]) -> None:
+        try:
+            conteudos = repo.get_contents(path)
+        except Exception as e:
+            print(f"DEBUG: Falha ao listar path '{path}': {e}")
+            return
 
         for conteudo in conteudos:
-            if conteudo.type == "dir":
-                _leitura_recursiva_com_debug(repo, extensoes, conteudo.path, arquivos_do_repo)
-            else:
-                # Lógica de decisão de leitura
-                ler_o_arquivo = False
-                if extensoes is None:
-                    ler_o_arquivo = True
+            try:
+                if conteudo.type == 'dir':
+                    self._read_recursive(repo, conteudo.path, file_filter, out)
                 else:
-                    if any(conteudo.path.endswith(ext) for ext in extensoes) or conteudo.name in extensoes:
-                        ler_o_arquivo = True
-                    
-                if ler_o_arquivo:
-                    try:
-                        codigo = conteudo.decoded_content.decode('utf-8')
-                        arquivos_do_repo[conteudo.path] = codigo
-                    except Exception as e:
-                        print(f"DEBUG: ERRO na decodificação de '{conteudo.path}': {e}")
-
-    except Exception as e:
-        print(e)
-        
-    return arquivos_do_repo
-
-
-def main(repo, tipo_de_analise: str):
-
-    repositorio_final = conection(repositorio=repo)
-
-    extensoes_alvo = MAPEAMENTO_TIPO_EXTENSOES.get(tipo_de_analise.lower())
-
-    arquivos_encontrados = _leitura_recursiva_com_debug(repositorio_final, 
-                                                        extensoes=extensoes_alvo)
-  
-    return arquivos_encontrados
+                    if file_filter.should_read(conteudo.path, conteudo.name):
+                        try:
+                            codigo = conteudo.decoded_content.decode('utf-8')
+                            out[conteudo.path] = codigo
+                        except Exception as e:
+                            print(f"DEBUG: ERRO na decodificação de '{conteudo.path}': {e}")
+            except Exception as e:
+                print(f"DEBUG: Erro ao processar '{getattr(conteudo, 'path', '?')}': {e}")
