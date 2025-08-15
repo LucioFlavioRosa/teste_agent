@@ -1,9 +1,10 @@
 from typing import Optional, Dict, Any
+import os
 from tools import github_reader
 from tools.revisor_geral import executar_analise_llm 
 
 
-modelo_llm = 'gpt-4.1'
+modelo_llm = os.getenv('MODEL_NAME', 'gpt-4o')
 max_tokens_saida = 3000
 
 analises_validas = ["design", "pentest", "seguranca", "terraform"]
@@ -12,7 +13,7 @@ def code_from_repo(repositorio: str,
                    tipo_analise: str):
 
     try:
-      print('Iniciando a leitura do repositório: '+ repositorio)
+      print('Iniciando a leitura do repositório: ' + repositorio)
       codigo_para_analise = github_reader.main(repo=repositorio,
                                                  tipo_de_analise=tipo_analise)
       
@@ -52,7 +53,7 @@ def main(tipo_analise: str,
                                    codigo=codigo)
                                    
   if not codigo_para_analise:
-    return ({"tipo_analise": tipo_analise, "resultado": 'Não foi fornecido nenhum código para análise'})
+    return {"tipo_analise": tipo_analise, "resultado": "Nenhum arquivo compatível encontrado para o tipo de análise."}
     
   else: 
     resultado = executar_analise_llm(
@@ -64,3 +65,20 @@ def main(tipo_analise: str,
         )
         
     return {"tipo_analise": tipo_analise, "resultado": resultado}
+
+# Alias para compatibilidade com chamadas existentes
+
+def executar_analise(tipo_analise: str,
+                     repositorio: Optional[str] = None,
+                     codigo: Optional[str] = None,
+                     instrucoes_extras: str = "",
+                     model_name: str = modelo_llm,
+                     max_token_out: int = max_tokens_saida) -> Dict[str, Any]:
+  return main(
+      tipo_analise=tipo_analise,
+      repositorio=repositorio,
+      codigo=codigo,
+      instrucoes_extras=instrucoes_extras,
+      model_name=model_name,
+      max_token_out=max_token_out
+  )
