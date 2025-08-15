@@ -10,6 +10,8 @@ Original file is located at
 #!pip install PyGithub
 
 from agents import agente_revisor
+from flask import Flask, request, jsonify
+import traceback
 
 nome_do_repositorio = "LucioFlavioRosa/agent-vinna"
 
@@ -19,12 +21,6 @@ resposta_desing = agente_revisor.executar_analise(tipo_analise='pentest', reposi
 #resposta_pen_test = agente_pen_test.main(repositorio=nome_do_repositorio)
 
 print(resposta_desing['resultado'])
-
-# app.py
-from flask import Flask, request, jsonify
-from agents import agente_revisor
-import traceback
-
 
 app = Flask(__name__)
 
@@ -63,9 +59,9 @@ def rodar_analise():
         return jsonify(resultado), 200
 
     except Exception as e:
-        print(f"ERRO: A execução do agente falhou. Causa: {e}")
+        print("ERRO: A execução do agente falhou.")
         traceback.print_exc()
-        return jsonify({"erro": f"Ocorreu um erro interno no servidor: {e}"}), 500
+        return jsonify({"erro": "Ocorreu um erro interno no servidor."}), 500
 
 @app.route("/")
 def index():
@@ -73,5 +69,4 @@ def index():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
-
+    app.run(host='0.0.0.0', port=5000, debug=False)
