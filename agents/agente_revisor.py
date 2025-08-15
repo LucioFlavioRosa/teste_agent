@@ -40,12 +40,20 @@ def validation(tipo_analise: str,
 
   return codigo_para_analise
 
+def executar_analise(tipo_analise: str,
+                     repositorio: Optional[str] = None,
+                     codigo: Optional[str] = None,
+                     instrucoes_extras: str = "",
+                     model_name: str = modelo_llm,
+                     max_token_out: int = max_tokens_saida) -> Dict[str, Any]:
+    return main(tipo_analise, repositorio, codigo, instrucoes_extras, model_name, max_token_out)
+
 def main(tipo_analise: str,
          repositorio: Optional[str] = None,
          codigo: Optional[str] = None,
          instrucoes_extras: str = "",
          model_name: str = modelo_llm,
-         max_token_out: int = max_tokens_saida)-> Dict[str, Any]:
+         max_token_out: int = max_tokens_saida) -> Dict[str, Any]:
 
   codigo_para_analise = validation(tipo_analise=tipo_analise,
                                    repositorio=repositorio,
