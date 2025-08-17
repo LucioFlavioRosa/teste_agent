@@ -55,12 +55,28 @@ def main(tipo_analise: str,
     return ({"tipo_analise": tipo_analise, "resultado": 'Não foi fornecido nenhum código para análise'})
     
   else: 
+    # Serialização estável do código para envio ao LLM
+    if isinstance(codigo_para_analise, dict):
+        partes = []
+        for path in sorted(codigo_para_analise.keys()):
+            conteudo_arquivo = codigo_para_analise[path]
+            conteudo_arquivo = "" if conteudo_arquivo is None else str(conteudo_arquivo)
+            partes.append(f"\n===== FILE: {path} =====\n{conteudo_arquivo}")
+        codigo_serializado = "".join(partes)
+    else:
+        codigo_serializado = str(codigo_para_analise)
+
     resultado = executar_analise_llm(
             tipo_analise=tipo_analise,
-            codigo=str(codigo_para_analise),
+            codigo=codigo_serializado,
             analise_extra=instrucoes_extras,
             model_name=model_name,
             max_token_out=max_token_out
         )
         
     return {"tipo_analise": tipo_analise, "resultado": resultado}
+
+# Alias público para manter compatibilidade com consumidores
+
+def executar_analise(*args, **kwargs):
+    return main(*args, **kwargs)
