@@ -1,10 +1,9 @@
 import os
 from openai import OpenAI
 from typing import Dict
-from google.colab import userdata
 
 
-OPENAI_API_KEY = userdata.get('OPENAI_API_KEY')
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 if not OPENAI_API_KEY:
     raise ValueError("A chave da API da OpenAI não foi encontrada. Defina a variável de ambiente OPENAI_API_KEY.")
 
