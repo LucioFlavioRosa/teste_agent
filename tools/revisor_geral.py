@@ -1,23 +1,27 @@
 import os
 from openai import OpenAI
 from typing import Dict
-from google.colab import userdata
 
 
-OPENAI_API_KEY = userdata.get('OPENAI_API_KEY')
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 if not OPENAI_API_KEY:
     raise ValueError("A chave da API da OpenAI não foi encontrada. Defina a variável de ambiente OPENAI_API_KEY.")
 
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 def carregar_prompt(tipo_analise: str) -> str:
-    """Carrega o conteúdo do arquivo de prompt correspondente."""
+    """Carrega o conteúdo do arquivo de prompt correspondente, com fallback padrão se ausente."""
     caminho_prompt = os.path.join(os.path.dirname(__file__), 'prompts', f'{tipo_analise}.md')
     try:
         with open(caminho_prompt, 'r', encoding='utf-8') as f:
             return f.read()
     except FileNotFoundError:
-        raise ValueError(f"Arquivo de prompt para a análise '{tipo_analise}' não encontrado em: {caminho_prompt}")
+        # Fallback: prompt padrão quando arquivo específico não existe
+        return (
+            f"Você é um especialista em {tipo_analise} encarregado de revisar um conjunto de arquivos de código.\n"
+            "Analise o conteúdo fornecido, aponte problemas, riscos e oportunidades de melhoria, "
+            "e sugira recomendações práticas e priorizadas. Seja objetivo e forneça exemplos quando apropriado."
+        )
 
 def executar_analise_llm(
     tipo_analise: str,
