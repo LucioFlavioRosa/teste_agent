@@ -1,11 +1,13 @@
+import os
 import re
 from github import Github
 from github.Auth import Token
-from google.colab import userdata
 
-def conection(repositorio: str):
-    GITHUB_TOKEN = userdata.get('github_token')
-    auth = Token(GITHUB_TOKEN)
+def conection(repositorio: str, github_token: str = None):
+    token = github_token or os.environ.get('GITHUB_TOKEN')
+    if not token:
+        raise ValueError("Token do GitHub não encontrado. Defina a variável de ambiente GITHUB_TOKEN ou forneça-o via parâmetro.")
+    auth = Token(token)
     g = Github(auth=auth)
     return g.get_repo(repositorio)
 
@@ -50,6 +52,7 @@ def _leitura_recursiva_com_debug(repo, extensoes, path="", arquivos_do_repo=None
         print(e)
         
     return arquivos_do_repo
+
 
 
 def main(repo, tipo_de_analise: str):
