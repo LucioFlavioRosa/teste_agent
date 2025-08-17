@@ -1,14 +1,18 @@
 import os
 from openai import OpenAI
-from typing import Dict
-from google.colab import userdata
 
+# Inicialização lazy do cliente OpenAI e suporte à injeção
+openai_client = None
 
-OPENAI_API_KEY = userdata.get('OPENAI_API_KEY')
-if not OPENAI_API_KEY:
-    raise ValueError("A chave da API da OpenAI não foi encontrada. Defina a variável de ambiente OPENAI_API_KEY.")
+def get_openai_client(api_key: str | None = None) -> OpenAI:
+    global openai_client
+    if openai_client is None:
+        key = api_key or os.getenv('OPENAI_API_KEY')
+        if not key:
+            raise ValueError("A chave da API da OpenAI não foi encontrada. Defina a variável de ambiente OPENAI_API_KEY.")
+        openai_client = OpenAI(api_key=key)
+    return openai_client
 
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 def carregar_prompt(tipo_analise: str) -> str:
     """Carrega o conteúdo do arquivo de prompt correspondente."""
@@ -19,14 +23,15 @@ def carregar_prompt(tipo_analise: str) -> str:
     except FileNotFoundError:
         raise ValueError(f"Arquivo de prompt para a análise '{tipo_analise}' não encontrado em: {caminho_prompt}")
 
+
 def executar_analise_llm(
     tipo_analise: str,
     codigo: str,
     analise_extra: str,
     model_name: str,
-    max_token_out: int
+    max_token_out: int,
+    client: OpenAI | None = None
 ) -> str:
-    
     
     prompt_sistema = carregar_prompt(tipo_analise)
 
@@ -37,7 +42,8 @@ def executar_analise_llm(
     ]
 
     try:
-        response = openai_client.chat.completions.create(
+        _client = client or openai_client or get_openai_client()
+        response = _client.chat.completions.create(
             model=model_name,
             messages=mensagens,
             temperature=0.5,
