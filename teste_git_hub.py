@@ -7,19 +7,6 @@ Original file is located at
     https://colab.research.google.com/drive/11ZTKLHaPzrTy8tcu3IYFSCefnnVtvIEF
 """
 
-#!pip install PyGithub
-
-from agents import agente_revisor
-
-nome_do_repositorio = "LucioFlavioRosa/agent-vinna"
-
-resposta_desing = agente_revisor.executar_analise(tipo_analise='pentest', repositorio=nome_do_repositorio)
-#resposta_desing = agente_revisor_design.main(repositorio=nome_do_repositorio)
-#resposta_seguranca = agente_revisor_seguranca.main(repositorio=nome_do_repositorio)
-#resposta_pen_test = agente_pen_test.main(repositorio=nome_do_repositorio)
-
-print(resposta_desing['resultado'])
-
 # app.py
 from flask import Flask, request, jsonify
 from agents import agente_revisor
@@ -73,5 +60,9 @@ def index():
 
 
 if __name__ == '__main__':
+    # Para uso manual/CLI, executar o servidor Flask.
+    # Exemplo de uso manual (não será executado automaticamente):
+    # from agents import agente_revisor
+    # nome_do_repositorio = "usuario/repositorio"
+    # print(agente_revisor.executar_analise(tipo_analise='pentest', repositorio=nome_do_repositorio))
     app.run(host='0.0.0.0', port=5000, debug=True)
-
