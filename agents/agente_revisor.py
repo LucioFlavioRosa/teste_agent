@@ -45,7 +45,9 @@ def main(tipo_analise: str,
          codigo: Optional[str] = None,
          instrucoes_extras: str = "",
          model_name: str = modelo_llm,
-         max_token_out: int = max_tokens_saida)-> Dict[str, Any]:
+         max_token_out: int = max_tokens_saida,
+         reader_func=github_reader.main,
+         llm_func=executar_analise_llm) -> Dict[str, Any]:
 
   codigo_para_analise = validation(tipo_analise=tipo_analise,
                                    repositorio=repositorio,
@@ -55,7 +57,7 @@ def main(tipo_analise: str,
     return ({"tipo_analise": tipo_analise, "resultado": 'Não foi fornecido nenhum código para análise'})
     
   else: 
-    resultado = executar_analise_llm(
+    resultado = llm_func(
             tipo_analise=tipo_analise,
             codigo=str(codigo_para_analise),
             analise_extra=instrucoes_extras,
@@ -64,3 +66,5 @@ def main(tipo_analise: str,
         )
         
     return {"tipo_analise": tipo_analise, "resultado": resultado}
+
+executar_analise = main
