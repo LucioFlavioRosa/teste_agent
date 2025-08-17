@@ -7,20 +7,6 @@ Original file is located at
     https://colab.research.google.com/drive/11ZTKLHaPzrTy8tcu3IYFSCefnnVtvIEF
 """
 
-#!pip install PyGithub
-
-from agents import agente_revisor
-
-nome_do_repositorio = "LucioFlavioRosa/agent-vinna"
-
-resposta_desing = agente_revisor.executar_analise(tipo_analise='pentest', repositorio=nome_do_repositorio)
-#resposta_desing = agente_revisor_design.main(repositorio=nome_do_repositorio)
-#resposta_seguranca = agente_revisor_seguranca.main(repositorio=nome_do_repositorio)
-#resposta_pen_test = agente_pen_test.main(repositorio=nome_do_repositorio)
-
-print(resposta_desing['resultado'])
-
-# app.py
 from flask import Flask, request, jsonify
 from agents import agente_revisor
 import traceback
@@ -52,7 +38,7 @@ def rodar_analise():
     try:
         print(f"INFO: Iniciando análise do tipo '{tipo_analise}'...")
 
-        resultado = agente_revisor.executar_analise(
+        resultado = agente_revisor.main(
             tipo_analise=tipo_analise,
             repositorio=repositorio,
             codigo=codigo,
@@ -74,4 +60,3 @@ def index():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
-
