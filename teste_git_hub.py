@@ -10,6 +10,8 @@ Original file is located at
 #!pip install PyGithub
 
 from agents import agente_revisor
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 nome_do_repositorio = "LucioFlavioRosa/agent-vinna"
 
@@ -27,9 +29,11 @@ import traceback
 
 
 app = Flask(__name__)
+limiter = Limiter(get_remote_address, app=app, default_limits=["200 per day", "50 per hour"])
 
 
 @app.route('/executar_analise', methods=['POST'])
+@limiter.limit("10 per minute")
 def rodar_analise():
 
     print("INFO: Requisição recebida no endpoint /executar_analise")
@@ -65,7 +69,7 @@ def rodar_analise():
     except Exception as e:
         print(f"ERRO: A execução do agente falhou. Causa: {e}")
         traceback.print_exc()
-        return jsonify({"erro": f"Ocorreu um erro interno no servidor: {e}"}), 500
+        return jsonify({"erro": "Ocorreu um erro interno no servidor."}), 500
 
 @app.route("/")
 def index():
@@ -73,5 +77,5 @@ def index():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000)
 
