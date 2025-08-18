@@ -1,3 +1,16 @@
+"""Módulo de execução de análises via LLM da OpenAI.
+
+Este módulo fornece funcionalidades para carregar prompts de análise e
+executar análises de código utilizando a API da OpenAI.
+
+Dependências:
+  - openai: Para comunicação com a API da OpenAI
+  - google.colab.userdata: Para obtenção segura da chave de API da OpenAI
+
+A configuração da API da OpenAI é feita através de uma chave armazenada
+no google.colab.userdata, evitando exposição de credenciais no código.
+"""
+
 import os
 from openai import OpenAI
 from typing import Dict
@@ -11,7 +24,17 @@ if not OPENAI_API_KEY:
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 def carregar_prompt(tipo_analise: str) -> str:
-    """Carrega o conteúdo do arquivo de prompt correspondente."""
+    """Carrega o conteúdo do arquivo de prompt correspondente.
+    
+    Args:
+        tipo_analise: Nome do tipo de análise que corresponde ao arquivo de prompt.
+        
+    Returns:
+        String contendo o conteúdo do arquivo de prompt.
+        
+    Raises:
+        ValueError: Se o arquivo de prompt para o tipo de análise não for encontrado.
+    """
     caminho_prompt = os.path.join(os.path.dirname(__file__), 'prompts', f'{tipo_analise}.md')
     try:
         with open(caminho_prompt, 'r', encoding='utf-8') as f:
@@ -26,6 +49,25 @@ def executar_analise_llm(
     model_name: str,
     max_token_out: int
 ) -> str:
+    """Executa uma análise de código utilizando a API da OpenAI.
+    
+    Carrega o prompt específico para o tipo de análise solicitado e envia
+    o código junto com instruções extras para o modelo LLM da OpenAI.
+    
+    Args:
+        tipo_analise: Tipo de análise a ser realizada, deve corresponder a um arquivo de prompt.
+        codigo: Código-fonte a ser analisado.
+        analise_extra: Instruções adicionais para a análise.
+        model_name: Nome do modelo LLM da OpenAI a ser utilizado.
+        max_token_out: Limite máximo de tokens na resposta.
+        
+    Returns:
+        String contendo o resultado da análise gerado pelo modelo LLM.
+        
+    Raises:
+        ValueError: Se o arquivo de prompt para o tipo de análise não for encontrado.
+        RuntimeError: Se ocorrer falha na comunicação com a API da OpenAI.
+    """
     
     
     prompt_sistema = carregar_prompt(tipo_analise)
