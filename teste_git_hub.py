@@ -24,12 +24,42 @@ print(resposta_desing['resultado'])
 from flask import Flask, request, jsonify
 from agents import agente_revisor
 import traceback
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+import os
+from functools import wraps
 
 
 app = Flask(__name__)
 
+# Configuração de rate limiting
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["5 per minute", "100 per day"],
+    storage_uri="memory://"
+)
+
+# Lista de repositórios permitidos (allow-list)
+ALLOWED_REPOS = [
+    "LucioFlavioRosa/agent-vinna",
+    "empresa/repo-seguro"
+]
+
+# Função para autenticação básica
+def require_api_key(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        api_key = request.headers.get('X-API-Key')
+        if not api_key or api_key != os.environ.get('API_SECRET_KEY'):
+            return jsonify({"erro": "Acesso não autorizado"}), 401
+        return f(*args, **kwargs)
+    return decorated
+
 
 @app.route('/executar_analise', methods=['POST'])
+@require_api_key
+@limiter.limit("3 per minute")
 def rodar_analise():
 
     print("INFO: Requisição recebida no endpoint /executar_analise")
@@ -49,6 +79,10 @@ def rodar_analise():
     if not repositorio and not codigo:
         return jsonify({"erro": "É obrigatório fornecer pelo menos um dos parâmetros: 'repositorio' ou 'codigo'."}), 400
 
+    # Validação de repositório permitido
+    if repositorio and repositorio not in ALLOWED_REPOS:
+        return jsonify({"erro": "Repositório não autorizado"}), 403
+
     try:
         print(f"INFO: Iniciando análise do tipo '{tipo_analise}'...")
 
@@ -63,9 +97,9 @@ def rodar_analise():
         return jsonify(resultado), 200
 
     except Exception as e:
-        print(f"ERRO: A execução do agente falhou. Causa: {e}")
-        traceback.print_exc()
-        return jsonify({"erro": f"Ocorreu um erro interno no servidor: {e}"}), 500
+        print(f"ERRO: A execução do agente falhou. Causa: {str(e)}")
+        # Não expor detalhes da exceção ao cliente
+        return jsonify({"erro": "Ocorreu um erro interno no servidor"}), 500
 
 @app.route("/")
 def index():
@@ -73,5 +107,6 @@ def index():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
-
+    # Desabilitar modo debug em produção
+    debug_mode = os.environ.get('FLASK_ENV') == 'development'
+    app.run(host='0.0.0.0', port=5000, debug=debug_mode)
