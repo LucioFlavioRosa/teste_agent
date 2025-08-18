@@ -24,7 +24,11 @@ print(resposta_desing['resultado'])
 from flask import Flask, request, jsonify
 from agents import agente_revisor
 import traceback
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
+# Executor para processar tarefas longas em threads separadas
+executor = ThreadPoolExecutor(max_workers=5)
 
 app = Flask(__name__)
 
@@ -49,15 +53,25 @@ def rodar_analise():
     if not repositorio and not codigo:
         return jsonify({"erro": "É obrigatório fornecer pelo menos um dos parâmetros: 'repositorio' ou 'codigo'."}), 400
 
+    # Validação de tamanho para evitar sobrecarga
+    if codigo and len(codigo) > 5 * 1024 * 1024:  # 5MB
+        return jsonify({"erro": "O código fornecido excede o tamanho máximo permitido (5MB)."}), 413
+
     try:
         print(f"INFO: Iniciando análise do tipo '{tipo_analise}'...")
 
-        resultado = agente_revisor.executar_analise(
-            tipo_analise=tipo_analise,
-            repositorio=repositorio,
-            codigo=codigo,
-            instrucoes_extras=instrucoes_extras
-        )
+        # Executar análise em uma thread separada para não bloquear o Flask
+        def task():
+            return agente_revisor.executar_analise(
+                tipo_analise=tipo_analise,
+                repositorio=repositorio,
+                codigo=codigo,
+                instrucoes_extras=instrucoes_extras
+            )
+
+        # Versão assíncrona usando ThreadPoolExecutor
+        future = executor.submit(task)
+        resultado = future.result()
 
         print("INFO: Análise concluída com sucesso.")
         return jsonify(resultado), 200
@@ -73,5 +87,4 @@ def index():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
-
+    app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)
