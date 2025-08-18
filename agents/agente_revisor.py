@@ -64,3 +64,21 @@ def main(tipo_analise: str,
         )
         
     return {"tipo_analise": tipo_analise, "resultado": resultado}
+
+# Wrapper exposto para compatibilidade com chamadas externas
+# Mantém a assinatura de main para delegar a execução
+
+def executar_analise(tipo_analise: str,
+                     repositorio: Optional[str] = None,
+                     codigo: Optional[str] = None,
+                     instrucoes_extras: str = "",
+                     model_name: str = modelo_llm,
+                     max_token_out: int = max_tokens_saida) -> Dict[str, Any]:
+    return main(
+        tipo_analise=tipo_analise,
+        repositorio=repositorio,
+        codigo=codigo,
+        instrucoes_extras=instrucoes_extras,
+        model_name=model_name,
+        max_token_out=max_token_out,
+    )
