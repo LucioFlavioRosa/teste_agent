@@ -40,7 +40,7 @@ def validation(tipo_analise: str,
 
   return codigo_para_analise
 
-def main(tipo_analise: str,
+def executar_analise(tipo_analise: str,
          repositorio: Optional[str] = None,
          codigo: Optional[str] = None,
          instrucoes_extras: str = "",
