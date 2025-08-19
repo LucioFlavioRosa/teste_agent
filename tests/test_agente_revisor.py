@@ -1,24 +1,24 @@
-import unittest
-from unittest.mock import patch, MagicMock
+import pytest
 from agents.agente_revisor import code_from_repo, validation
 
-class TestAgenteRevisor(unittest.TestCase):
 
-    @patch('agents.agente_revisor.github_reader.main')
-    def test_code_from_repo_valid_repo(self, mock_github_reader):
-        mock_github_reader.return_value = 'some code'
-        result = code_from_repo('valid/repo', 'design')
-        self.assertEqual(result, 'some code')
+def test_code_from_repo_valid(mocker):
+    mocker.patch('tools.github_reader.main', return_value='mocked_code')
+    result = code_from_repo('valid/repo', 'design')
+    assert result == 'mocked_code'
 
-    @patch('agents.agente_revisor.github_reader.main')
-    def test_code_from_repo_invalid_repo(self, mock_github_reader):
-        mock_github_reader.side_effect = RuntimeError('Invalid repo')
-        with self.assertRaises(RuntimeError):
-            code_from_repo('invalid/repo', 'design')
 
-    def test_validation_tipo_analise_invalido(self):
-        with self.assertRaises(ValueError):
-            validation(tipo_analise='invalid', repositorio='some/repo')
+def test_code_from_repo_invalid(mocker):
+    mocker.patch('tools.github_reader.main', side_effect=RuntimeError('Falha ao executar a análise de design'))
+    with pytest.raises(RuntimeError, match="Falha ao executar a análise de 'design'"):
+        code_from_repo('invalid/repo', 'design')
 
-if __name__ == '__main__':
-    unittest.main()
+
+def test_validation_tipo_analise_invalido():
+    with pytest.raises(ValueError, match="Tipo de análise 'invalido' é inválido."):
+        validation(tipo_analise='invalido')
+
+
+def test_validation_sem_repositorio_ou_codigo():
+    with pytest.raises(ValueError, match="Erro: É obrigatório fornecer 'repositorio' ou 'codigo'."):
+        validation(tipo_analise='design')
