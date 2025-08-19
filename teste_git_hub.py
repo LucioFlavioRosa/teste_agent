@@ -13,7 +13,7 @@ from agents import agente_revisor
 
 nome_do_repositorio = "LucioFlavioRosa/agent-vinna"
 
-resposta_desing = agente_revisor.executar_analise(tipo_analise='pentest', repositorio=nome_do_repositorio)
+resposta_desing = agente_revisor.main(tipo_analise='pentest', repositorio=nome_do_repositorio)
 #resposta_desing = agente_revisor_design.main(repositorio=nome_do_repositorio)
 #resposta_seguranca = agente_revisor_seguranca.main(repositorio=nome_do_repositorio)
 #resposta_pen_test = agente_pen_test.main(repositorio=nome_do_repositorio)
@@ -52,7 +52,7 @@ def rodar_analise():
     try:
         print(f"INFO: Iniciando análise do tipo '{tipo_analise}'...")
 
-        resultado = agente_revisor.executar_analise(
+        resultado = agente_revisor.main(
             tipo_analise=tipo_analise,
             repositorio=repositorio,
             codigo=codigo,

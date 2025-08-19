@@ -64,3 +64,6 @@ def main(tipo_analise: str,
         )
         
     return {"tipo_analise": tipo_analise, "resultado": resultado}
+
+# Alias para manter compatibilidade
+executar_analise = main
