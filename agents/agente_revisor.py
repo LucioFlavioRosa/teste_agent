@@ -40,6 +40,24 @@ def validation(tipo_analise: str,
 
   return codigo_para_analise
 
+def formatar_resposta(tipo_analise: str, resultado: str) -> Dict[str, Any]:
+    """Formata a resposta da análise."""
+    return {"tipo_analise": tipo_analise, "resultado": resultado}
+
+def executar_analise(codigo_para_analise: str,
+                    tipo_analise: str,
+                    instrucoes_extras: str,
+                    model_name: str,
+                    max_token_out: int) -> str:
+    """Executa a análise LLM."""
+    return executar_analise_llm(
+        tipo_analise=tipo_analise,
+        codigo=str(codigo_para_analise),
+        analise_extra=instrucoes_extras,
+        model_name=model_name,
+        max_token_out=max_token_out
+    )
+
 def main(tipo_analise: str,
          repositorio: Optional[str] = None,
          codigo: Optional[str] = None,
@@ -52,15 +70,15 @@ def main(tipo_analise: str,
                                    codigo=codigo)
                                    
   if not codigo_para_analise:
-    return ({"tipo_analise": tipo_analise, "resultado": 'Não foi fornecido nenhum código para análise'})
+    return formatar_resposta(tipo_analise, 'Não foi fornecido nenhum código para análise')
     
   else: 
-    resultado = executar_analise_llm(
-            tipo_analise=tipo_analise,
-            codigo=str(codigo_para_analise),
-            analise_extra=instrucoes_extras,
-            model_name=model_name,
-            max_token_out=max_token_out
-        )
+    resultado = executar_analise(
+        codigo_para_analise=codigo_para_analise,
+        tipo_analise=tipo_analise,
+        instrucoes_extras=instrucoes_extras,
+        model_name=model_name,
+        max_token_out=max_token_out
+    )
         
-    return {"tipo_analise": tipo_analise, "resultado": resultado}
+    return formatar_resposta(tipo_analise, resultado)
