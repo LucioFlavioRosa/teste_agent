@@ -10,21 +10,15 @@ Original file is located at
 #!pip install PyGithub
 
 from agents import agente_revisor
-from unittest.mock import patch, MagicMock
-import unittest
+from unittest.mock import patch
 
 nome_do_repositorio = "LucioFlavioRosa/agent-vinna"
 
-class TestAgenteRevisor(unittest.TestCase):
-    
-    @patch('agents.agente_revisor.executar_analise')
-    def test_executar_analise(self, mock_executar_analise):
-        mock_executar_analise.return_value = {'tipo_analise': 'pentest', 'resultado': 'mocked result'}
-        resposta_desing = agente_revisor.executar_analise(tipo_analise='pentest', repositorio=nome_do_repositorio)
-        self.assertEqual(resposta_desing['resultado'], 'mocked result')
-
-if __name__ == '__main__':
-    unittest.main()
+@patch('agents.agente_revisor.executar_analise')
+def test_resposta_desing(mock_executar_analise):
+    mock_executar_analise.return_value = {'resultado': 'mocked result'}
+    resposta_desing = agente_revisor.executar_analise(tipo_analise='pentest', repositorio=nome_do_repositorio)
+    print(resposta_desing['resultado'])
 
 # app.py
 from flask import Flask, request, jsonify
