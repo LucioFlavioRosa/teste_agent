@@ -14,8 +14,8 @@ def carregar_prompt(tipo_analise: str) -> str:
     try:
         with open(caminho_prompt, 'r', encoding='utf-8') as f:
             return f.read()
-    except FileNotFoundError:
-        raise ValueError(f"Arquivo de prompt para a análise '{tipo_analise}' não encontrado em: {caminho_prompt}")
+    except FileNotFoundError as e:
+        raise ValueError(f"Arquivo de prompt para a análise '{tipo_analise}' não encontrado em: {caminho_prompt}") from e
 
 def executar_analise_llm(
     tipo_analise: str,
