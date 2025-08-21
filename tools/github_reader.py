@@ -3,6 +3,7 @@ from github import Github
 from github.Auth import Token
 from google.colab import userdata
 import logging
+import concurrent.futures
 
 # Configuração básica de logging estruturado
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -54,22 +55,34 @@ def ler_arquivo_do_github(conteudo):
         logging.exception(f"Erro na decodificação de '{conteudo.path}': {e}")
         return None
 
-def leitura_recursiva(repo, extensoes, path="", arquivos_do_repo=None):
+def leitura_recursiva(repo, extensoes, path="", arquivos_do_repo=None, max_workers=8):
     """
     Função recursiva para percorrer diretórios e ler arquivos do repositório GitHub.
+    Agora utiliza paralelização para leitura dos arquivos.
     """
     if arquivos_do_repo is None:
         arquivos_do_repo = {}
     try:
         conteudos = repo.get_contents(path)
+        arquivos = []
+        diretorios = []
         for conteudo in conteudos:
             if conteudo.type == "dir":
-                leitura_recursiva(repo, extensoes, conteudo.path, arquivos_do_repo)
+                diretorios.append(conteudo.path)
             else:
                 if deve_ler_arquivo(conteudo, extensoes):
-                    codigo = ler_arquivo_do_github(conteudo)
-                    if codigo is not None:
-                        arquivos_do_repo[conteudo.path] = codigo
+                    arquivos.append(conteudo)
+        # Paraleliza leitura dos arquivos elegíveis
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futuros = {executor.submit(ler_arquivo_do_github, arquivo): arquivo for arquivo in arquivos}
+            for futuro in concurrent.futures.as_completed(futuros):
+                arquivo = futuros[futuro]
+                codigo = futuro.result()
+                if codigo is not None:
+                    arquivos_do_repo[arquivo.path] = codigo
+        # Processa diretórios recursivamente
+        for dir_path in diretorios:
+            leitura_recursiva(repo, extensoes, dir_path, arquivos_do_repo, max_workers)
     except Exception as e:
         logging.exception(f"Erro ao ler arquivos em '{path}': {e}")
     return arquivos_do_repo
@@ -87,3 +100,6 @@ def ler_arquivos_do_github(repo, tipo_de_analise: str):
     except Exception as e:
         logging.exception(f"Erro na leitura dos arquivos do GitHub para análise '{tipo_de_analise}': {e}")
         raise
+
+def main(repo: str, tipo_de_analise: str):
+    return ler_arquivos_do_github(repo, tipo_de_analise)
