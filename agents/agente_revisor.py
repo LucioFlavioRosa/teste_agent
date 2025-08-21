@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union
 from tools import github_reader
 from tools.revisor_geral import executar_analise_llm
 import logging
@@ -9,7 +9,7 @@ TIPOS_ANALISE_VALIDOS = ["design", "pentest", "seguranca", "terraform"]
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
-def obter_codigo_repositorio(repositorio_nome: str, tipo_analise: str):
+def obter_codigo_repositorio(repositorio_nome: str, tipo_analise: str) -> Dict[str, str]:
     try:
         logging.info(f'Iniciando a leitura do repositório: {repositorio_nome}')
         arquivos_codigo = github_reader.obter_arquivos_para_analise(repo_nome=repositorio_nome, tipo_analise=tipo_analise)
@@ -17,37 +17,49 @@ def obter_codigo_repositorio(repositorio_nome: str, tipo_analise: str):
     except (ValueError, RuntimeError) as e:
         logging.error(f"Falha ao executar a análise de '{tipo_analise}': {e}")
         raise
-    except Exception as e:
-        logging.error(f"Erro inesperado ao obter código do repositório: {e}")
+    except KeyError as e:
+        logging.error(f"Erro de chave ao obter código do repositório: {e}")
+        raise
+    except TypeError as e:
+        logging.error(f"Erro de tipo ao obter código do repositório: {e}")
         raise
 
-def validar_parametros_entrada(tipo_analise: str, repositorio_nome: Optional[str] = None, codigo: Optional[str] = None):
+def validar_parametros_entrada(tipo_analise: str, repositorio_nome: Optional[str] = None, codigo_entrada: Optional[Union[str, Dict[str, str]]] = None):
     if tipo_analise not in TIPOS_ANALISE_VALIDOS:
         raise ValueError(f"Tipo de análise '{tipo_analise}' é inválido. Válidos: {TIPOS_ANALISE_VALIDOS}")
-    if repositorio_nome is None and codigo is None:
-        raise ValueError("Erro: É obrigatório fornecer 'repositorio' ou 'codigo'.")
+    if repositorio_nome is None and codigo_entrada is None:
+        raise ValueError("Erro: É obrigatório fornecer 'repositorio' ou 'codigo_entrada'.")
     return True
 
-def preparar_codigo_para_analise(tipo_analise: str, repositorio_nome: Optional[str], codigo: Optional[str]):
-    if codigo is not None:
-        return codigo
+def preparar_codigo_para_analise(tipo_analise: str, repositorio_nome: Optional[str], codigo_entrada: Optional[Union[str, Dict[str, str]]]):
+    if codigo_entrada is not None:
+        return codigo_entrada
     return obter_codigo_repositorio(repositorio_nome=repositorio_nome, tipo_analise=tipo_analise)
+
+def montar_codigo_para_llm(codigo_entrada: Union[str, Dict[str, str]]) -> str:
+    """
+    Concatena o conteúdo dos arquivos se o código for um dicionário, ou retorna a string diretamente.
+    """
+    if isinstance(codigo_entrada, dict):
+        return '\n\n'.join(f"# Arquivo: {k}\n{v}" for k, v in codigo_entrada.items())
+    return str(codigo_entrada)
 
 def executar_analise(tipo_analise: str,
                      repositorio: Optional[str] = None,
-                     codigo: Optional[str] = None,
+                     codigo_entrada: Optional[Union[str, Dict[str, str]]] = None,
                      instrucoes_extras: str = "",
                      model_name: str = MODELO_PADRAO_LLM,
                      max_token_out: int = MAX_TOKENS_SAIDA) -> Dict[str, Any]:
     try:
-        validar_parametros_entrada(tipo_analise=tipo_analise, repositorio_nome=repositorio, codigo=codigo)
-        codigo_para_analise = preparar_codigo_para_analise(tipo_analise=tipo_analise, repositorio_nome=repositorio, codigo=codigo)
+        validar_parametros_entrada(tipo_analise=tipo_analise, repositorio_nome=repositorio, codigo_entrada=codigo_entrada)
+        codigo_para_analise = preparar_codigo_para_analise(tipo_analise=tipo_analise, repositorio_nome=repositorio, codigo_entrada=codigo_entrada)
         if not codigo_para_analise:
             logging.warning('Não foi fornecido nenhum código para análise.')
             return {"tipo_analise": tipo_analise, "resultado": 'Não foi fornecido nenhum código para análise'}
+        codigo_final = montar_codigo_para_llm(codigo_para_analise)
         resultado = executar_analise_llm(
             tipo_analise=tipo_analise,
-            codigo=str(codigo_para_analise),
+            codigo=codigo_final,
             analise_extra=instrucoes_extras,
             model_name=model_name,
             max_token_out=max_token_out
@@ -59,9 +71,9 @@ def executar_analise(tipo_analise: str,
     except RuntimeError as re:
         logging.error(f"Erro de execução: {re}")
         raise
-    except (KeyError, TypeError) as e:
-        logging.error(f"Erro de parâmetro: {e}")
+    except KeyError as ke:
+        logging.error(f"Erro de chave: {ke}")
         raise
-    except Exception as e:
-        logging.error(f"Erro inesperado durante a execução da análise: {e}")
+    except TypeError as te:
+        logging.error(f"Erro de tipo: {te}")
         raise
