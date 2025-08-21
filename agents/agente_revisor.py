@@ -44,6 +44,22 @@ def montar_codigo_para_llm(codigo_entrada: Union[str, Dict[str, str]]) -> str:
         return '\n\n'.join(f"# Arquivo: {k}\n{v}" for k, v in codigo_entrada.items())
     return str(codigo_entrada)
 
+def tratar_erro_validacao(ve: Exception):
+    logging.error(f"Erro de validação: {ve}")
+    raise
+
+def tratar_erro_execucao(re: Exception):
+    logging.error(f"Erro de execução: {re}")
+    raise
+
+def tratar_erro_chave(ke: Exception):
+    logging.error(f"Erro de chave: {ke}")
+    raise
+
+def tratar_erro_tipo(te: Exception):
+    logging.error(f"Erro de tipo: {te}")
+    raise
+
 def executar_analise(tipo_analise: str,
                      repositorio: Optional[str] = None,
                      codigo_entrada: Optional[Union[str, Dict[str, str]]] = None,
@@ -66,14 +82,10 @@ def executar_analise(tipo_analise: str,
         )
         return {"tipo_analise": tipo_analise, "resultado": resultado}
     except ValueError as ve:
-        logging.error(f"Erro de validação: {ve}")
-        raise
+        tratar_erro_validacao(ve)
     except RuntimeError as re:
-        logging.error(f"Erro de execução: {re}")
-        raise
+        tratar_erro_execucao(re)
     except KeyError as ke:
-        logging.error(f"Erro de chave: {ke}")
-        raise
+        tratar_erro_chave(ke)
     except TypeError as te:
-        logging.error(f"Erro de tipo: {te}")
-        raise
+        tratar_erro_tipo(te)
