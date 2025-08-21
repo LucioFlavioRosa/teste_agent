@@ -1,84 +1,64 @@
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union
 from tools import github_reader
-from tools.revisor_geral import executar_analise_llm 
+from tools.revisor_geral import executar_analise_llm
+import logging
 
+MODELO_PADRAO_LLM = 'gpt-4.1'
+MAX_TOKENS_SAIDA = 3000
+TIPOS_ANALISE_VALIDOS = ["design", "pentest", "seguranca", "terraform"]
 
-modelo_llm = 'gpt-4.1'
-max_tokens_saida = 3000
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
-analises_validas = ["design", "pentest", "seguranca", "terraform"]
+def validar_tipo_analise(tipo_analise: str):
+    if tipo_analise not in TIPOS_ANALISE_VALIDOS:
+        raise ValueError(f"Tipo de análise '{tipo_analise}' é inválido. Válidos: {TIPOS_ANALISE_VALIDOS}")
 
-def code_from_repo(repositorio: str,
-                   tipo_analise: str):
+def validar_parametros(repositorio_nome: Optional[str], codigo_entrada: Optional[Union[str, Dict[str, str]]]):
+    if repositorio_nome is None and codigo_entrada is None:
+        raise ValueError("Erro: É obrigatório fornecer 'repositorio' ou 'codigo_entrada'.")
 
+def obter_codigo(repositorio_nome: str, tipo_analise: str) -> Dict[str, str]:
+    logging.info(f'Iniciando a leitura do repositório: {repositorio_nome}')
+    return github_reader.obter_arquivos_para_analise(repo_nome=repositorio_nome, tipo_analise=tipo_analise)
+
+def preparar_codigo(tipo_analise: str, repositorio_nome: Optional[str], codigo_entrada: Optional[Union[str, Dict[str, str]]]):
+    if codigo_entrada is not None:
+        return codigo_entrada
+    return obter_codigo(repositorio_nome=repositorio_nome, tipo_analise=tipo_analise)
+
+def montar_codigo_para_llm(codigo_entrada: Union[str, Dict[str, str]]) -> str:
+    """
+    Concatena o conteúdo dos arquivos se o código for um dicionário, ou retorna a string diretamente.
+    """
+    if isinstance(codigo_entrada, dict):
+        return '\n\n'.join(f"# Arquivo: {k}\n{v}" for k, v in codigo_entrada.items())
+    return str(codigo_entrada)
+
+def tratar_erro(e: Exception, contexto: str = ""):
+    logging.error(f"Erro em {contexto}: {type(e).__name__}: {e}")
+    raise
+
+def executar_analise(tipo_analise: str,
+                     repositorio: Optional[str] = None,
+                     codigo_entrada: Optional[Union[str, Dict[str, str]]] = None,
+                     instrucoes_extras: str = "",
+                     model_name: str = MODELO_PADRAO_LLM,
+                     max_token_out: int = MAX_TOKENS_SAIDA) -> Dict[str, Any]:
     try:
-      print('Iniciando a leitura do repositório: '+ repositorio)
-      codigo_para_analise = github_reader.main(repo=repositorio,
-                                                 tipo_de_analise=tipo_analise)
-      
-      return codigo_para_analise
-
+        validar_tipo_analise(tipo_analise)
+        validar_parametros(repositorio_nome=repositorio, codigo_entrada=codigo_entrada)
+        codigo_para_analise = preparar_codigo(tipo_analise=tipo_analise, repositorio_nome=repositorio, codigo_entrada=codigo_entrada)
+        if not codigo_para_analise:
+            logging.warning('Não foi fornecido nenhum código para análise.')
+            return {"tipo_analise": tipo_analise, "resultado": 'Não foi fornecido nenhum código para análise'}
+        codigo_llm = montar_codigo_para_llm(codigo_para_analise)
+        resultado = executar_analise_llm(
+            tipo_analise=tipo_analise,
+            codigo=codigo_llm,
+            analise_extra=instrucoes_extras,
+            model_name=model_name,
+            max_token_out=max_token_out
+        )
+        return {"tipo_analise": tipo_analise, "resultado": resultado}
     except Exception as e:
-        raise RuntimeError(f"Falha ao executar a análise de '{tipo_analise}': {e}") from e
-
-def validation(tipo_analise: str,
-               repositorio: Optional[str] = None,
-               codigo: Optional[str] = None):
-
-  if tipo_analise not in analises_validas:
-        raise ValueError(f"Tipo de análise '{tipo_analise}' é inválido. Válidos: {analises_validas}")
-
-  if repositorio is None and codigo is None:
-        raise ValueError("Erro: É obrigatório fornecer 'repositorio' ou 'codigo'.")
-
-  if codigo is None:
-    codigo_para_analise = code_from_repo(tipo_analise=tipo_analise,
-                                         repositorio=repositorio)
-
-  else:
-    codigo_para_analise = codigo
-
-  return codigo_para_analise
-
-def formatar_resposta(tipo_analise: str, resultado: str) -> Dict[str, Any]:
-    """Formata a resposta da análise."""
-    return {"tipo_analise": tipo_analise, "resultado": resultado}
-
-def executar_analise(codigo_para_analise: str,
-                    tipo_analise: str,
-                    instrucoes_extras: str,
-                    model_name: str,
-                    max_token_out: int) -> str:
-    """Executa a análise LLM."""
-    return executar_analise_llm(
-        tipo_analise=tipo_analise,
-        codigo=str(codigo_para_analise),
-        analise_extra=instrucoes_extras,
-        model_name=model_name,
-        max_token_out=max_token_out
-    )
-
-def main(tipo_analise: str,
-         repositorio: Optional[str] = None,
-         codigo: Optional[str] = None,
-         instrucoes_extras: str = "",
-         model_name: str = modelo_llm,
-         max_token_out: int = max_tokens_saida)-> Dict[str, Any]:
-
-  codigo_para_analise = validation(tipo_analise=tipo_analise,
-                                   repositorio=repositorio,
-                                   codigo=codigo)
-                                   
-  if not codigo_para_analise:
-    return formatar_resposta(tipo_analise, 'Não foi fornecido nenhum código para análise')
-    
-  else: 
-    resultado = executar_analise(
-        codigo_para_analise=codigo_para_analise,
-        tipo_analise=tipo_analise,
-        instrucoes_extras=instrucoes_extras,
-        model_name=model_name,
-        max_token_out=max_token_out
-    )
-        
-    return formatar_resposta(tipo_analise, resultado)
+        tratar_erro(e, contexto="executar_analise")
