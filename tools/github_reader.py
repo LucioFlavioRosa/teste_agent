@@ -4,19 +4,20 @@ from github.Auth import Token
 from google.colab import userdata
 import logging
 import concurrent.futures
+from typing import Dict, Any, List
 
 # Configuração básica de logging estruturado
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
-MAPEAMENTO_TIPO_EXTENSOES = {
+TIPO_EXTENSOES_MAPEAMENTO = {
     "terraform": [".tf", ".tfvars"],
     "python": [".py"],
     "cloudformation": [".json", ".yaml", ".yml"],
     "ansible": [".yml", ".yaml"],
-    "docker": ["Dockerfile"], 
+    "docker": ["Dockerfile"],
 }
 
-def conectar_ao_github(repositorio: str):
+def conectar_ao_github(repositorio_nome: str):
     """
     Realiza conexão autenticada ao GitHub e retorna o objeto de repositório.
     """
@@ -26,80 +27,94 @@ def conectar_ao_github(repositorio: str):
             logging.error("Token do GitHub não encontrado em userdata.")
             raise ValueError("Token do GitHub não encontrado.")
         auth = Token(GITHUB_TOKEN)
-        g = Github(auth=auth)
-        repo_obj = g.get_repo(repositorio)
-        logging.info(f"Conexão bem-sucedida com o repositório: {repositorio}")
-        return repo_obj
+        github_client = Github(auth=auth)
+        repositorio = github_client.get_repo(repositorio_nome)
+        logging.info(f"Conexão bem-sucedida com o repositório: {repositorio_nome}")
+        return repositorio
+    except (ValueError, RuntimeError) as e:
+        logging.error(f"Erro ao conectar ao GitHub para o repositório '{repositorio_nome}': {e}")
+        raise
     except Exception as e:
-        logging.exception(f"Erro ao conectar ao GitHub para o repositório '{repositorio}': {e}")
+        logging.exception(f"Erro inesperado ao conectar ao GitHub para o repositório '{repositorio_nome}': {e}")
         raise
 
-def deve_ler_arquivo(conteudo, extensoes):
+def arquivo_deve_ser_lido(arquivo_obj, extensoes_alvo: List[str]):
     """
     Decide se um arquivo deve ser lido com base nas extensões alvo.
     """
-    if extensoes is None:
+    if extensoes_alvo is None:
         return True
-    if any(conteudo.path.endswith(ext) for ext in extensoes) or conteudo.name in extensoes:
+    if any(arquivo_obj.path.endswith(ext) for ext in extensoes_alvo) or arquivo_obj.name in extensoes_alvo:
         return True
     return False
 
-def ler_arquivo_do_github(conteudo):
+def ler_conteudo_arquivo_github(arquivo_obj):
     """
     Lê e decodifica o conteúdo de um arquivo do GitHub.
     """
     try:
-        codigo = conteudo.decoded_content.decode('utf-8')
-        return codigo
+        conteudo_arquivo = arquivo_obj.decoded_content.decode('utf-8')
+        return conteudo_arquivo
+    except AttributeError as e:
+        logging.error(f"Arquivo sem conteúdo decodificável '{arquivo_obj.path}': {e}")
+        return None
     except Exception as e:
-        logging.exception(f"Erro na decodificação de '{conteudo.path}': {e}")
+        logging.error(f"Erro inesperado na decodificação de '{arquivo_obj.path}': {e}")
         return None
 
-def leitura_recursiva(repo, extensoes, path="", arquivos_do_repo=None, max_workers=8):
+def coletar_arquivos_e_diretorios(conteudos, extensoes_alvo: List[str]):
+    arquivos = []
+    diretorios = []
+    for item in conteudos:
+        if item.type == "dir":
+            diretorios.append(item.path)
+        else:
+            if arquivo_deve_ser_lido(item, extensoes_alvo):
+                arquivos.append(item)
+    return arquivos, diretorios
+
+def leitura_iterativa_com_paralelismo(repo, extensoes_alvo: List[str], caminho_inicial="", max_workers=8):
     """
-    Função recursiva para percorrer diretórios e ler arquivos do repositório GitHub.
-    Agora utiliza paralelização para leitura dos arquivos.
+    Percorre o repositório de forma iterativa (não recursiva) e paraleliza leitura de arquivos e diretórios.
     """
-    if arquivos_do_repo is None:
-        arquivos_do_repo = {}
-    try:
-        conteudos = repo.get_contents(path)
-        arquivos = []
-        diretorios = []
-        for conteudo in conteudos:
-            if conteudo.type == "dir":
-                diretorios.append(conteudo.path)
-            else:
-                if deve_ler_arquivo(conteudo, extensoes):
-                    arquivos.append(conteudo)
+    arquivos_do_repo = {}
+    caminhos_a_explorar = [caminho_inicial]
+    while caminhos_a_explorar:
+        caminho_atual = caminhos_a_explorar.pop()
+        try:
+            conteudos = repo.get_contents(caminho_atual)
+        except Exception as e:
+            logging.error(f"Erro ao obter conteúdo em '{caminho_atual}': {e}")
+            continue
+        arquivos, diretorios = coletar_arquivos_e_diretorios(conteudos, extensoes_alvo)
         # Paraleliza leitura dos arquivos elegíveis
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futuros = {executor.submit(ler_arquivo_do_github, arquivo): arquivo for arquivo in arquivos}
+            futuros = {executor.submit(ler_conteudo_arquivo_github, arquivo): arquivo for arquivo in arquivos}
             for futuro in concurrent.futures.as_completed(futuros):
                 arquivo = futuros[futuro]
-                codigo = futuro.result()
-                if codigo is not None:
-                    arquivos_do_repo[arquivo.path] = codigo
-        # Processa diretórios recursivamente
-        for dir_path in diretorios:
-            leitura_recursiva(repo, extensoes, dir_path, arquivos_do_repo, max_workers)
-    except Exception as e:
-        logging.exception(f"Erro ao ler arquivos em '{path}': {e}")
+                conteudo = futuro.result()
+                if conteudo is not None:
+                    arquivos_do_repo[arquivo.path] = conteudo
+        # Adiciona diretórios para próxima iteração
+        caminhos_a_explorar.extend(diretorios)
     return arquivos_do_repo
 
-def ler_arquivos_do_github(repo, tipo_de_analise: str):
+def ler_arquivos_repositorio_github(repositorio_nome: str, tipo_analise: str):
     """
     Função principal para ler arquivos do GitHub conforme o tipo de análise.
     """
     try:
-        repositorio_final = conectar_ao_github(repositorio=repo)
-        extensoes_alvo = MAPEAMENTO_TIPO_EXTENSOES.get(tipo_de_analise.lower())
-        arquivos_encontrados = leitura_recursiva(repositorio_final, extensoes=extensoes_alvo)
-        logging.info(f"Arquivos encontrados para análise '{tipo_de_analise}': {list(arquivos_encontrados.keys())}")
+        repositorio = conectar_ao_github(repositorio_nome=repositorio_nome)
+        extensoes_alvo = TIPO_EXTENSOES_MAPEAMENTO.get(tipo_analise.lower())
+        arquivos_encontrados = leitura_iterativa_com_paralelismo(repositorio, extensoes_alvo)
+        logging.info(f"Arquivos encontrados para análise '{tipo_analise}': {list(arquivos_encontrados.keys())}")
         return arquivos_encontrados
+    except (ValueError, RuntimeError) as e:
+        logging.error(f"Erro ao ler arquivos do GitHub para análise '{tipo_analise}': {e}")
+        raise
     except Exception as e:
-        logging.exception(f"Erro na leitura dos arquivos do GitHub para análise '{tipo_de_analise}': {e}")
+        logging.error(f"Erro inesperado na leitura dos arquivos do GitHub para análise '{tipo_analise}': {e}")
         raise
 
-def main(repo: str, tipo_de_analise: str):
-    return ler_arquivos_do_github(repo, tipo_de_analise)
+def obter_arquivos_para_analise(repo_nome: str, tipo_analise: str):
+    return ler_arquivos_repositorio_github(repo_nome, tipo_analise)
