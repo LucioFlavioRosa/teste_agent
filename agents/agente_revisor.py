@@ -9,55 +9,55 @@ TIPOS_ANALISE_VALIDOS = ["design", "pentest", "seguranca", "terraform"]
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
-def obter_codigo_repositorio(repositorio_nome: str, tipo_analise: str) -> Dict[str, str]:
+def obter_arquivos_do_repositorio_para_analise(nome_repositorio: str, tipo_analise: str) -> Dict[str, str]:
     try:
-        logging.info(f'Iniciando a leitura do repositório: {repositorio_nome}')
-        arquivos_codigo = github_reader.obter_arquivos_para_analise(repo_nome=repositorio_nome, tipo_analise=tipo_analise)
+        logging.info(f'Iniciando a leitura do repositório: {nome_repositorio}')
+        arquivos_codigo = github_reader.obter_arquivos_para_analise(repo_nome=nome_repositorio, tipo_analise=tipo_analise)
         return arquivos_codigo
-    except (ValueError, RuntimeError) as e:
-        logging.error(f"Falha ao executar a análise de '{tipo_analise}': {e}")
+    except (ValueError, RuntimeError) as erro:
+        logging.error(f"Falha ao executar a análise de '{tipo_analise}': {erro}")
         raise
-    except KeyError as e:
-        logging.error(f"Erro de chave ao obter código do repositório: {e}")
+    except KeyError as erro:
+        logging.error(f"Erro de chave ao obter código do repositório: {erro}")
         raise
-    except TypeError as e:
-        logging.error(f"Erro de tipo ao obter código do repositório: {e}")
+    except TypeError as erro:
+        logging.error(f"Erro de tipo ao obter código do repositório: {erro}")
         raise
 
-def validar_parametros_entrada(tipo_analise: str, repositorio_nome: Optional[str] = None, codigo_entrada: Optional[Union[str, Dict[str, str]]] = None):
+def validar_parametros_de_entrada(tipo_analise: str, nome_repositorio: Optional[str] = None, codigo_entrada: Optional[Union[str, Dict[str, str]]] = None):
     if tipo_analise not in TIPOS_ANALISE_VALIDOS:
         raise ValueError(f"Tipo de análise '{tipo_analise}' é inválido. Válidos: {TIPOS_ANALISE_VALIDOS}")
-    if repositorio_nome is None and codigo_entrada is None:
+    if nome_repositorio is None and codigo_entrada is None:
         raise ValueError("Erro: É obrigatório fornecer 'repositorio' ou 'codigo_entrada'.")
     return True
 
-def preparar_codigo_para_analise(tipo_analise: str, repositorio_nome: Optional[str], codigo_entrada: Optional[Union[str, Dict[str, str]]]):
+def preparar_codigo_para_analise(tipo_analise: str, nome_repositorio: Optional[str], codigo_entrada: Optional[Union[str, Dict[str, str]]]):
     if codigo_entrada is not None:
         return codigo_entrada
-    return obter_codigo_repositorio(repositorio_nome=repositorio_nome, tipo_analise=tipo_analise)
+    return obter_arquivos_do_repositorio_para_analise(nome_repositorio=nome_repositorio, tipo_analise=tipo_analise)
 
-def montar_codigo_para_llm(codigo_entrada: Union[str, Dict[str, str]]) -> str:
+def montar_codigo_para_envio_llm(codigo_entrada: Union[str, Dict[str, str]]) -> str:
     """
     Concatena o conteúdo dos arquivos se o código for um dicionário, ou retorna a string diretamente.
     """
     if isinstance(codigo_entrada, dict):
-        return '\n\n'.join(f"# Arquivo: {k}\n{v}" for k, v in codigo_entrada.items())
+        return '\n\n'.join(f"# Arquivo: {caminho}\n{conteudo}" for caminho, conteudo in codigo_entrada.items())
     return str(codigo_entrada)
 
-def tratar_erro_validacao(ve: Exception):
-    logging.error(f"Erro de validação: {ve}")
+def tratar_erro_validacao(erro: Exception):
+    logging.error(f"Erro de validação: {erro}")
     raise
 
-def tratar_erro_execucao(re: Exception):
-    logging.error(f"Erro de execução: {re}")
+def tratar_erro_execucao(erro: Exception):
+    logging.error(f"Erro de execução: {erro}")
     raise
 
-def tratar_erro_chave(ke: Exception):
-    logging.error(f"Erro de chave: {ke}")
+def tratar_erro_chave(erro: Exception):
+    logging.error(f"Erro de chave: {erro}")
     raise
 
-def tratar_erro_tipo(te: Exception):
-    logging.error(f"Erro de tipo: {te}")
+def tratar_erro_tipo(erro: Exception):
+    logging.error(f"Erro de tipo: {erro}")
     raise
 
 def executar_analise(tipo_analise: str,
@@ -66,13 +66,16 @@ def executar_analise(tipo_analise: str,
                      instrucoes_extras: str = "",
                      model_name: str = MODELO_PADRAO_LLM,
                      max_token_out: int = MAX_TOKENS_SAIDA) -> Dict[str, Any]:
+    """
+    Executa a análise dividindo responsabilidades em funções menores e usando nomes claros.
+    """
     try:
-        validar_parametros_entrada(tipo_analise=tipo_analise, repositorio_nome=repositorio, codigo_entrada=codigo_entrada)
-        codigo_para_analise = preparar_codigo_para_analise(tipo_analise=tipo_analise, repositorio_nome=repositorio, codigo_entrada=codigo_entrada)
+        validar_parametros_de_entrada(tipo_analise=tipo_analise, nome_repositorio=repositorio, codigo_entrada=codigo_entrada)
+        codigo_para_analise = preparar_codigo_para_analise(tipo_analise=tipo_analise, nome_repositorio=repositorio, codigo_entrada=codigo_entrada)
         if not codigo_para_analise:
             logging.warning('Não foi fornecido nenhum código para análise.')
             return {"tipo_analise": tipo_analise, "resultado": 'Não foi fornecido nenhum código para análise'}
-        codigo_final = montar_codigo_para_llm(codigo_para_analise)
+        codigo_final = montar_codigo_para_envio_llm(codigo_para_analise)
         resultado = executar_analise_llm(
             tipo_analise=tipo_analise,
             codigo=codigo_final,
@@ -81,11 +84,11 @@ def executar_analise(tipo_analise: str,
             max_token_out=max_token_out
         )
         return {"tipo_analise": tipo_analise, "resultado": resultado}
-    except ValueError as ve:
-        tratar_erro_validacao(ve)
-    except RuntimeError as re:
-        tratar_erro_execucao(re)
-    except KeyError as ke:
-        tratar_erro_chave(ke)
-    except TypeError as te:
-        tratar_erro_tipo(te)
+    except ValueError as erro:
+        tratar_erro_validacao(erro)
+    except RuntimeError as erro:
+        tratar_erro_execucao(erro)
+    except KeyError as erro:
+        tratar_erro_chave(erro)
+    except TypeError as erro:
+        tratar_erro_tipo(erro)
