@@ -1,11 +1,10 @@
 import re
 from github import Github
-from github.Auth import Token
-from google.colab import userdata
 import logging
 import concurrent.futures
 from typing import Dict, Any, List, Optional
 import time
+import os
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
@@ -21,14 +20,28 @@ MAX_RETRIES = 3
 RETRY_DELAY = 2  # segundos
 MAX_PARALLELISM = 4  # Limite para evitar throttling da API
 
+def obter_github_token():
+    """Obtém o token do GitHub de diferentes fontes."""
+    try:
+        # Tenta primeiro do Google Colab
+        from google.colab import userdata
+        return userdata.get('github_token')
+    except ImportError:
+        # Se não estiver no Colab, tenta variável de ambiente
+        token = os.getenv('GITHUB_TOKEN')
+        if not token:
+            raise ValueError("Token do GitHub não encontrado. Configure GITHUB_TOKEN como variável de ambiente ou execute no Google Colab.")
+        return token
+
 def conectar_ao_github(repositorio_nome: str):
     try:
-        GITHUB_TOKEN = userdata.get('github_token')
+        GITHUB_TOKEN = obter_github_token()
         if not GITHUB_TOKEN:
-            logging.error("Token do GitHub não encontrado em userdata.")
+            logging.error("Token do GitHub não encontrado.")
             raise ValueError("Token do GitHub não encontrado.")
-        auth = Token(GITHUB_TOKEN)
-        github_client = Github(auth=auth)
+        
+        # Correção: usar Github(token) diretamente sem Auth.Token
+        github_client = Github(GITHUB_TOKEN)
         repositorio = github_client.get_repo(repositorio_nome)
         logging.info(f"Conexão bem-sucedida com o repositório: {repositorio_nome}")
         return repositorio
@@ -64,7 +77,6 @@ def ler_conteudo_arquivo_com_retry(arquivo_obj):
             else:
                 return None
 
-
 def coletar_arquivos_e_diretorios(conteudos, extensoes_alvo: List[str]):
     arquivos = []
     diretorios = []
@@ -75,7 +87,6 @@ def coletar_arquivos_e_diretorios(conteudos, extensoes_alvo: List[str]):
             if arquivo_esta_na_lista_de_extensoes(item, extensoes_alvo):
                 arquivos.append(item)
     return arquivos, diretorios
-
 
 def leitura_iterativa_com_paralelismo_e_retry(repo, extensoes_alvo: List[str], caminho_inicial="", max_workers=MAX_PARALLELISM, max_depth: Optional[int]=None):
     """
@@ -104,7 +115,6 @@ def leitura_iterativa_com_paralelismo_e_retry(repo, extensoes_alvo: List[str], c
         caminhos_a_explorar.extend([(d, profundidade + 1) for d in diretorios])
     return arquivos_do_repo
 
-
 def ler_arquivos_repositorio_github(repositorio_nome: str, tipo_analise: str, max_workers: int = MAX_PARALLELISM, max_depth: Optional[int] = None):
     try:
         repositorio = conectar_ao_github(repositorio_nome=repositorio_nome)
@@ -124,7 +134,6 @@ def ler_arquivos_repositorio_github(repositorio_nome: str, tipo_analise: str, ma
     except TypeError as e:
         logging.error(f"Erro de tipo ao ler arquivos do GitHub: {e}")
         raise
-
 
 def obter_arquivos_para_analise(repo_nome: str, tipo_analise: str, max_workers: int = MAX_PARALLELISM, max_depth: Optional[int] = None):
     return ler_arquivos_repositorio_github(repo_nome, tipo_analise, max_workers=max_workers, max_depth=max_depth)
