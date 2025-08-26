@@ -1,7 +1,18 @@
 from typing import Optional, Dict, Any, Union
-from tools import github_reader
-from tools.revisor_geral import executar_analise_llm
+import sys
+import os
 import logging
+
+# Adiciona o diretório raiz ao PYTHONPATH para resolver imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+try:
+    from tools import github_reader
+    from tools.revisor_geral import executar_analise_llm
+except ImportError as e:
+    logging.error(f"Erro ao importar módulos: {e}")
+    logging.error("Certifique-se de que os diretórios 'tools' e 'agents' estão no PYTHONPATH")
+    raise
 
 MODELO_PADRAO_LLM = 'gpt-4.1'
 MAX_TOKENS_SAIDA = 3000
