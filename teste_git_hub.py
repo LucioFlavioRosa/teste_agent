@@ -9,29 +9,37 @@ Original file is located at
 
 #!pip install PyGithub
 
-from agents import agente_revisor
+import sys
+import os
+
+# Adiciona o diretório atual ao PYTHONPATH para resolver imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+try:
+    from agents import agente_revisor
+except ImportError as e:
+    print(f"Erro ao importar agente_revisor: {e}")
+    print("Certifique-se de que o diretório 'agents' existe e contém o arquivo 'agente_revisor.py'")
+    sys.exit(1)
 
 nome_do_repositorio = "LucioFlavioRosa/agent-vinna"
 
-resposta_desing = agente_revisor.executar_analise(tipo_analise='pentest', repositorio=nome_do_repositorio)
-#resposta_desing = agente_revisor_design.main(repositorio=nome_do_repositorio)
-#resposta_seguranca = agente_revisor_seguranca.main(repositorio=nome_do_repositorio)
-#resposta_pen_test = agente_pen_test.main(repositorio=nome_do_repositorio)
-
-print(resposta_desing['resultado'])
+try:
+    resposta_desing = agente_revisor.executar_analise(tipo_analise='pentest', repositorio=nome_do_repositorio)
+    print(resposta_desing['resultado'])
+except Exception as e:
+    print(f"Erro durante a execução da análise: {e}")
+    import traceback
+    traceback.print_exc()
 
 # app.py
 from flask import Flask, request, jsonify
-from agents import agente_revisor
 import traceback
-
 
 app = Flask(__name__)
 
-
 @app.route('/executar_analise', methods=['POST'])
 def rodar_analise():
-
     print("INFO: Requisição recebida no endpoint /executar_analise")
 
     dados = request.get_json()
@@ -55,7 +63,7 @@ def rodar_analise():
         resultado = agente_revisor.executar_analise(
             tipo_analise=tipo_analise,
             repositorio=repositorio,
-            codigo=codigo,
+            codigo_entrada=codigo,
             instrucoes_extras=instrucoes_extras
         )
 
@@ -71,7 +79,5 @@ def rodar_analise():
 def index():
     return "<h1>Servidor de Agentes de IA está no ar!</h1><p>Use o endpoint <b>/executar_analise</b> via POST para rodar uma análise.</p>"
 
-
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
-
