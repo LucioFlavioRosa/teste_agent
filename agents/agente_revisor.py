@@ -66,6 +66,20 @@ def executar_analise(tipo_analise: str,
                      instrucoes_extras: str = "",
                      model_name: str = MODELO_PADRAO_LLM,
                      max_token_out: int = MAX_TOKENS_SAIDA) -> Dict[str, Any]:
+    """
+    Executa a análise do código fornecido ou do repositório especificado, utilizando o modelo LLM.
+
+    Parâmetros:
+        tipo_analise (str): Tipo de análise a ser realizada ('design', 'pentest', 'seguranca', 'terraform').
+        repositorio (str, opcional): Nome do repositório GitHub a ser analisado.
+        codigo_entrada (str ou dict, opcional): Código fonte a ser analisado.
+        instrucoes_extras (str): Instruções adicionais do usuário para a análise.
+        model_name (str): Nome do modelo LLM a ser utilizado.
+        max_token_out (int): Número máximo de tokens na resposta.
+
+    Retorno:
+        dict: Resultado da análise.
+    """
     try:
         validar_parametros_entrada(tipo_analise=tipo_analise, repositorio_nome=repositorio, codigo_entrada=codigo_entrada)
         codigo_para_analise = preparar_codigo_para_analise(tipo_analise=tipo_analise, repositorio_nome=repositorio, codigo_entrada=codigo_entrada)
