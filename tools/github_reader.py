@@ -1,11 +1,10 @@
 import re
 from github import Github
-from github.Auth import Token
-from google.colab import userdata
 import logging
 import concurrent.futures
 from typing import Dict, Any, List, Optional
 import time
+import os
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
@@ -21,14 +20,28 @@ MAX_RETRIES = 3
 RETRY_DELAY = 2  # segundos
 MAX_PARALLELISM = 4  # Limite para evitar throttling da API
 
+def obter_github_token():
+    """Obtém o token do GitHub de diferentes fontes dependendo do ambiente."""
+    try:
+        # Tenta primeiro o Google Colab
+        from google.colab import userdata
+        return userdata.get('github_token')
+    except ImportError:
+        # Se não estiver no Colab, tenta variável de ambiente
+        token = os.getenv('GITHUB_TOKEN')
+        if not token:
+            raise ValueError("Token do GitHub não encontrado. Configure GITHUB_TOKEN como variável de ambiente ou no Google Colab userdata.")
+        return token
+
 def conectar_ao_github(repositorio_nome: str):
     try:
-        GITHUB_TOKEN = userdata.get('github_token')
+        GITHUB_TOKEN = obter_github_token()
         if not GITHUB_TOKEN:
-            logging.error("Token do GitHub não encontrado em userdata.")
+            logging.error("Token do GitHub não encontrado.")
             raise ValueError("Token do GitHub não encontrado.")
-        auth = Token(GITHUB_TOKEN)
-        github_client = Github(auth=auth)
+        
+        # Usar apenas Github com token como string
+        github_client = Github(GITHUB_TOKEN)
         repositorio = github_client.get_repo(repositorio_nome)
         logging.info(f"Conexão bem-sucedida com o repositório: {repositorio_nome}")
         return repositorio
