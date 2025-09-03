@@ -1,5 +1,5 @@
 from typing import Optional, Dict, Any, Union
-from tools import github_reader
+from tools.readers import reader_geral
 from tools.revisor_geral import executar_analise_llm
 import logging
 
@@ -9,10 +9,10 @@ TIPOS_ANALISE_VALIDOS = ["design", "pentest", "seguranca", "terraform"]
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
-def obter_codigo_repositorio(repositorio_nome: str, tipo_analise: str) -> Dict[str, str]:
+def obter_codigo_repositorio(repositorio_nome: str, tipo_analise: str, fonte: str = "github") -> Dict[str, str]:
     try:
         logging.info(f'Iniciando a leitura do repositório: {repositorio_nome}')
-        arquivos_codigo = github_reader.obter_arquivos_para_analise(repo_nome=repositorio_nome, tipo_analise=tipo_analise)
+        arquivos_codigo = reader_geral.obter_arquivos_para_analise(repo_nome=repositorio_nome, tipo_analise=tipo_analise, fonte=fonte)
         return arquivos_codigo
     except (ValueError, RuntimeError) as e:
         logging.error(f"Falha ao executar a análise de '{tipo_analise}': {e}")
@@ -31,15 +31,12 @@ def validar_parametros_entrada(tipo_analise: str, repositorio_nome: Optional[str
         raise ValueError("Erro: É obrigatório fornecer 'repositorio' ou 'codigo_entrada'.")
     return True
 
-def preparar_codigo_para_analise(tipo_analise: str, repositorio_nome: Optional[str], codigo_entrada: Optional[Union[str, Dict[str, str]]]):
+def preparar_codigo_para_analise(tipo_analise: str, repositorio_nome: Optional[str], codigo_entrada: Optional[Union[str, Dict[str, str]]], fonte: str = "github"):
     if codigo_entrada is not None:
         return codigo_entrada
-    return obter_codigo_repositorio(repositorio_nome=repositorio_nome, tipo_analise=tipo_analise)
+    return obter_codigo_repositorio(repositorio_nome=repositorio_nome, tipo_analise=tipo_analise, fonte=fonte)
 
 def montar_codigo_para_llm(codigo_entrada: Union[str, Dict[str, str]]) -> str:
-    """
-    Concatena o conteúdo dos arquivos se o código for um dicionário, ou retorna a string diretamente.
-    """
     if isinstance(codigo_entrada, dict):
         return '\n\n'.join(f"# Arquivo: {k}\n{v}" for k, v in codigo_entrada.items())
     return str(codigo_entrada)
@@ -65,10 +62,11 @@ def executar_analise(tipo_analise: str,
                      codigo_entrada: Optional[Union[str, Dict[str, str]]] = None,
                      instrucoes_extras: str = "",
                      model_name: str = MODELO_PADRAO_LLM,
-                     max_token_out: int = MAX_TOKENS_SAIDA) -> Dict[str, Any]:
+                     max_token_out: int = MAX_TOKENS_SAIDA,
+                     fonte: str = "github") -> Dict[str, Any]:
     try:
         validar_parametros_entrada(tipo_analise=tipo_analise, repositorio_nome=repositorio, codigo_entrada=codigo_entrada)
-        codigo_para_analise = preparar_codigo_para_analise(tipo_analise=tipo_analise, repositorio_nome=repositorio, codigo_entrada=codigo_entrada)
+        codigo_para_analise = preparar_codigo_para_analise(tipo_analise=tipo_analise, repositorio_nome=repositorio, codigo_entrada=codigo_entrada, fonte=fonte)
         if not codigo_para_analise:
             logging.warning('Não foi fornecido nenhum código para análise.')
             return {"tipo_analise": tipo_analise, "resultado": 'Não foi fornecido nenhum código para análise'}
