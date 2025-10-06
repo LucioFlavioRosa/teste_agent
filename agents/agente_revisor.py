@@ -1,91 +1,165 @@
 from typing import Optional, Dict, Any, Union
-from tools import github_reader
-from tools.revisor_geral import executar_analise_llm
+from .interfaces import IRepositoryReader, IAnalysisExecutor, IParameterValidator, ICodeProcessor
+from .implementations import GitHubRepositoryReader, LLMAnalysisExecutor, ParameterValidator, CodeProcessor
+from .error_handlers import CompositeErrorHandler
 import logging
 
+# Constantes de configuração
 MODELO_PADRAO_LLM = 'gpt-4.1'
 MAX_TOKENS_SAIDA = 3000
 TIPOS_ANALISE_VALIDOS = ["design", "pentest", "seguranca", "terraform"]
 
+# Configuração de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
-def obter_codigo_repositorio(repositorio_nome: str, tipo_analise: str) -> Dict[str, str]:
-    try:
-        logging.info(f'Iniciando a leitura do repositório: {repositorio_nome}')
-        arquivos_codigo = github_reader.obter_arquivos_para_analise(repo_nome=repositorio_nome, tipo_analise=tipo_analise)
-        return arquivos_codigo
-    except (ValueError, RuntimeError) as e:
-        logging.error(f"Falha ao executar a análise de '{tipo_analise}': {e}")
-        raise
-    except KeyError as e:
-        logging.error(f"Erro de chave ao obter código do repositório: {e}")
-        raise
-    except TypeError as e:
-        logging.error(f"Erro de tipo ao obter código do repositório: {e}")
-        raise
 
-def validar_parametros_entrada(tipo_analise: str, repositorio_nome: Optional[str] = None, codigo_entrada: Optional[Union[str, Dict[str, str]]] = None):
-    if tipo_analise not in TIPOS_ANALISE_VALIDOS:
-        raise ValueError(f"Tipo de análise '{tipo_analise}' é inválido. Válidos: {TIPOS_ANALISE_VALIDOS}")
-    if repositorio_nome is None and codigo_entrada is None:
-        raise ValueError("Erro: É obrigatório fornecer 'repositorio' ou 'codigo_entrada'.")
-    return True
-
-def preparar_codigo_para_analise(tipo_analise: str, repositorio_nome: Optional[str], codigo_entrada: Optional[Union[str, Dict[str, str]]]):
-    if codigo_entrada is not None:
-        return codigo_entrada
-    return obter_codigo_repositorio(repositorio_nome=repositorio_nome, tipo_analise=tipo_analise)
-
-def montar_codigo_para_llm(codigo_entrada: Union[str, Dict[str, str]]) -> str:
+class AgenteRevisor:
+    """Agente principal responsável pela orquestração da análise de código.
+    
+    Esta classe implementa o padrão de injeção de dependências e segue os princípios SOLID:
+    - SRP: Cada componente tem uma responsabilidade única
+    - DIP: Depende de abstrações, não de implementações concretas
+    - ISP: Interfaces segregadas por responsabilidade
     """
-    Concatena o conteúdo dos arquivos se o código for um dicionário, ou retorna a string diretamente.
-    """
-    if isinstance(codigo_entrada, dict):
-        return '\n\n'.join(f"# Arquivo: {k}\n{v}" for k, v in codigo_entrada.items())
-    return str(codigo_entrada)
+    
+    def __init__(self, 
+                 repository_reader: Optional[IRepositoryReader] = None,
+                 analysis_executor: Optional[IAnalysisExecutor] = None,
+                 parameter_validator: Optional[IParameterValidator] = None,
+                 code_processor: Optional[ICodeProcessor] = None):
+        """Inicializa o agente com injeção de dependências.
+        
+        Args:
+            repository_reader: Leitor de repositórios (padrão: GitHubRepositoryReader)
+            analysis_executor: Executor de análises (padrão: LLMAnalysisExecutor)
+            parameter_validator: Validador de parâmetros (padrão: ParameterValidator)
+            code_processor: Processador de código (padrão: CodeProcessor)
+        """
+        # Injeção de dependências com implementações padrão
+        self.repository_reader = repository_reader or GitHubRepositoryReader()
+        self.analysis_executor = analysis_executor or LLMAnalysisExecutor()
+        self.parameter_validator = parameter_validator or ParameterValidator(TIPOS_ANALISE_VALIDOS)
+        self.code_processor = code_processor or CodeProcessor(self.repository_reader)
+        
+        # Manipulador de erros
+        self.error_handler = CompositeErrorHandler()
+        
+        # Logger
+        self.logger = logging.getLogger(__name__)
+    
+    def executar_analise(self, 
+                        tipo_analise: str,
+                        repositorio: Optional[str] = None,
+                        codigo_entrada: Optional[Union[str, Dict[str, str]]] = None,
+                        instrucoes_extras: str = "",
+                        model_name: str = MODELO_PADRAO_LLM,
+                        max_token_out: int = MAX_TOKENS_SAIDA) -> Dict[str, Any]:
+        """Executa análise de código seguindo o fluxo completo.
+        
+        Args:
+            tipo_analise: Tipo de análise a ser realizada
+            repositorio: Nome do repositório (opcional)
+            codigo_entrada: Código de entrada direto (opcional)
+            instrucoes_extras: Instruções adicionais para análise
+            model_name: Nome do modelo LLM a ser usado
+            max_token_out: Máximo de tokens de saída
+            
+        Returns:
+            Dicionário com tipo de análise e resultado
+            
+        Raises:
+            ValueError: Se parâmetros inválidos
+            RuntimeError: Se erro na execução
+            KeyError: Se erro de chave
+            TypeError: Se erro de tipo
+        """
+        try:
+            # 1. Validação de parâmetros
+            self._validar_entrada(tipo_analise, repositorio, codigo_entrada)
+            
+            # 2. Preparação do código
+            codigo_preparado = self._preparar_codigo(tipo_analise, repositorio, codigo_entrada)
+            
+            # 3. Verificação se há código para análise
+            if not codigo_preparado:
+                self.logger.warning('Não foi fornecido nenhum código para análise.')
+                return {
+                    "tipo_analise": tipo_analise, 
+                    "resultado": 'Não foi fornecido nenhum código para análise'
+                }
+            
+            # 4. Montagem do código para LLM
+            codigo_final = self._montar_codigo_llm(codigo_preparado)
+            
+            # 5. Execução da análise
+            resultado = self._executar_analise_llm(
+                tipo_analise, codigo_final, instrucoes_extras, model_name, max_token_out
+            )
+            
+            return {
+                "tipo_analise": tipo_analise, 
+                "resultado": resultado
+            }
+            
+        except (ValueError, RuntimeError, KeyError, TypeError) as e:
+            self.error_handler.handle_error(e, "executar_analise")
+    
+    def _validar_entrada(self, tipo_analise: str, repositorio: Optional[str], 
+                        codigo_entrada: Optional[Union[str, Dict[str, str]]]) -> None:
+        """Valida parâmetros de entrada."""
+        try:
+            self.parameter_validator.validar_parametros(tipo_analise, repositorio, codigo_entrada)
+        except ValueError as e:
+            self.error_handler.handle_error(e, "validação de parâmetros")
+    
+    def _preparar_codigo(self, tipo_analise: str, repositorio: Optional[str], 
+                        codigo_entrada: Optional[Union[str, Dict[str, str]]]) -> Union[str, Dict[str, str]]:
+        """Prepara código para análise."""
+        try:
+            return self.code_processor.preparar_codigo(tipo_analise, repositorio, codigo_entrada)
+        except (RuntimeError, KeyError, TypeError) as e:
+            self.error_handler.handle_error(e, "preparação de código")
+    
+    def _montar_codigo_llm(self, codigo_preparado: Union[str, Dict[str, str]]) -> str:
+        """Monta código em formato adequado para LLM."""
+        try:
+            return self.code_processor.montar_codigo_para_llm(codigo_preparado)
+        except TypeError as e:
+            self.error_handler.handle_error(e, "montagem de código para LLM")
+    
+    def _executar_analise_llm(self, tipo_analise: str, codigo: str, instrucoes_extras: str, 
+                             model_name: str, max_token_out: int) -> str:
+        """Executa análise usando LLM."""
+        try:
+            return self.analysis_executor.executar_analise_llm(
+                tipo_analise=tipo_analise,
+                codigo=codigo,
+                analise_extra=instrucoes_extras,
+                model_name=model_name,
+                max_token_out=max_token_out
+            )
+        except RuntimeError as e:
+            self.error_handler.handle_error(e, "execução de análise LLM")
 
-def tratar_erro_validacao(ve: Exception):
-    logging.error(f"Erro de validação: {ve}")
-    raise
 
-def tratar_erro_execucao(re: Exception):
-    logging.error(f"Erro de execução: {re}")
-    raise
-
-def tratar_erro_chave(ke: Exception):
-    logging.error(f"Erro de chave: {ke}")
-    raise
-
-def tratar_erro_tipo(te: Exception):
-    logging.error(f"Erro de tipo: {te}")
-    raise
-
+# Função de conveniência para manter compatibilidade com a API existente
 def executar_analise(tipo_analise: str,
                      repositorio: Optional[str] = None,
                      codigo_entrada: Optional[Union[str, Dict[str, str]]] = None,
                      instrucoes_extras: str = "",
                      model_name: str = MODELO_PADRAO_LLM,
                      max_token_out: int = MAX_TOKENS_SAIDA) -> Dict[str, Any]:
-    try:
-        validar_parametros_entrada(tipo_analise=tipo_analise, repositorio_nome=repositorio, codigo_entrada=codigo_entrada)
-        codigo_para_analise = preparar_codigo_para_analise(tipo_analise=tipo_analise, repositorio_nome=repositorio, codigo_entrada=codigo_entrada)
-        if not codigo_para_analise:
-            logging.warning('Não foi fornecido nenhum código para análise.')
-            return {"tipo_analise": tipo_analise, "resultado": 'Não foi fornecido nenhum código para análise'}
-        codigo_final = montar_codigo_para_llm(codigo_para_analise)
-        resultado = executar_analise_llm(
-            tipo_analise=tipo_analise,
-            codigo=codigo_final,
-            analise_extra=instrucoes_extras,
-            model_name=model_name,
-            max_token_out=max_token_out
-        )
-        return {"tipo_analise": tipo_analise, "resultado": resultado}
-    except ValueError as ve:
-        tratar_erro_validacao(ve)
-    except RuntimeError as re:
-        tratar_erro_execucao(re)
-    except KeyError as ke:
-        tratar_erro_chave(ke)
-    except TypeError as te:
-        tratar_erro_tipo(te)
+    """Função de conveniência que mantém a interface original.
+    
+    Esta função cria uma instância do AgenteRevisor e executa a análise,
+    mantendo compatibilidade com código existente que usa a função diretamente.
+    """
+    agente = AgenteRevisor()
+    return agente.executar_analise(
+        tipo_analise=tipo_analise,
+        repositorio=repositorio,
+        codigo_entrada=codigo_entrada,
+        instrucoes_extras=instrucoes_extras,
+        model_name=model_name,
+        max_token_out=max_token_out
+    )
