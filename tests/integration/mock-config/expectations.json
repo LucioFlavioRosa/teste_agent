@@ -1,0 +1,86 @@
+[
+  {
+    "httpRequest": {
+      "method": "GET",
+      "path": "/github/repos/.*",
+      "headers": {
+        "Authorization": ["token .*"]
+      }
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": ["application/json"]
+      },
+      "body": {
+        "id": 123456789,
+        "name": "test-repository",
+        "full_name": "user/test-repository",
+        "private": false,
+        "description": "Repository for integration tests",
+        "default_branch": "main"
+      }
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "GET",
+      "path": "/github/repos/.*/contents.*",
+      "headers": {
+        "Authorization": ["token .*"]
+      }
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": ["application/json"]
+      },
+      "body": [
+        {
+          "name": "config.py",
+          "path": "app/config.py",
+          "type": "file",
+          "size": 1024,
+          "content": "aW1wb3J0IG9zCgpjbGFzcyBDb25maWc6CiAgICBEQVRBQkFTRV9VUkwgPSBvcy5nZXRlbnYoJ0RBVEFCQVNFX1VSTCcsICdzcWxpdGU6Ly8vZGVmYXVsdC5kYicpCg==",
+          "encoding": "base64"
+        }
+      ]
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "POST",
+      "path": "/api/v1/chat/completions",
+      "headers": {
+        "Authorization": ["Bearer .*"]
+      }
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": ["application/json"]
+      },
+      "body": {
+        "id": "chatcmpl-test123",
+        "object": "chat.completion",
+        "created": 1677652288,
+        "model": "gpt-3.5-turbo",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "# Análise de Código\n\n## Pontos Positivos\n✅ Uso adequado de variáveis de ambiente\n✅ Configuração flexível para diferentes ambientes\n\n## Recomendações\n- Implementar validação de configurações obrigatórias\n- Adicionar logs para debugging"
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 100,
+          "completion_tokens": 50,
+          "total_tokens": 150
+        }
+      }
+    }
+  }
+]

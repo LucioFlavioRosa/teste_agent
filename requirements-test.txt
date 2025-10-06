@@ -1,0 +1,38 @@
+# Dependências específicas para testes
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.0
+pytest-xdist>=3.3.0
+pytest-html>=3.2.0
+pytest-json-report>=1.5.0
+
+# Ferramentas de mock e fixtures
+factory-boy>=3.3.0
+faker>=19.0.0
+responses>=0.23.0
+requests-mock>=1.11.0
+
+# Ferramentas para testes de integração
+testcontainers>=3.7.0
+docker>=6.1.0
+psycopg2-binary>=2.9.0
+redis>=4.6.0
+
+# Ferramentas de qualidade de código
+flake8>=6.0.0
+black>=23.0.0
+isort>=5.12.0
+mypy>=1.5.0
+bandit>=1.7.0
+
+# Ferramentas de cobertura e relatórios
+coverage>=7.3.0
+coverage-badge>=1.1.0
+
+# Ferramentas para testes de performance
+locust>=2.16.0
+
+# Utilitários para debugging
+ipdb>=0.13.0
+pytest-pdb>=0.2.0
