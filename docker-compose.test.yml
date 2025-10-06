@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  # Banco de dados PostgreSQL para testes de integração
+  test-postgres:
+    image: postgres:13-alpine
+    environment:
+      POSTGRES_DB: testdb
+      POSTGRES_USER: testuser
+      POSTGRES_PASSWORD: testpass
+    ports:
+      - "5433:5432"
+    volumes:
+      - test_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U testuser -d testdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis para cache em testes
+  test-redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - test_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # Mock server para APIs externas
+  mock-api-server:
+    image: mockserver/mockserver:5.15.0
+    ports:
+      - "1080:1080"
+    environment:
+      MOCKSERVER_WATCH_INITIALIZATION_JSON: "true"
+      MOCKSERVER_PROPERTY_FILE: /config/mockserver.properties
+      MOCKSERVER_INITIALIZATION_JSON_PATH: /config/expectations.json
+    volumes:
+      - ./tests/integration/mock-config:/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:1080/mockserver/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Aplicação principal para testes de integração
+  app-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    depends_on:
+      test-postgres:
+        condition: service_healthy
+      test-redis:
+        condition: service_healthy
+      mock-api-server:
+        condition: service_healthy
+    environment:
+      # Configurações de banco de dados
+      DATABASE_URL: postgresql://testuser:testpass@test-postgres:5432/testdb
+      DATABASE_POOL_SIZE: 3
+      
+      # Configurações de cache
+      REDIS_URL: redis://test-redis:6379/0
+      
+      # Configurações de APIs externas
+      GITHUB_API_URL: http://mock-api-server:1080/github
+      API_BASE_URL: http://mock-api-server:1080/api
+      API_TIMEOUT: 10
+      
+      # Tokens de teste (não são tokens reais)
+      GITHUB_TOKEN: test-github-token-for-integration
+      OPENAI_API_KEY: test-openai-key-for-integration
+      OPENAI_MODEL: gpt-3.5-turbo
+      
+      # Configurações de ambiente
+      ENVIRONMENT: test
+      LOG_LEVEL: DEBUG
+      PYTHONPATH: /app
+    volumes:
+      - .:/app
+      - test_app_logs:/app/logs
+    working_dir: /app
+    command: >
+      sh -c "
+        echo 'Aguardando serviços dependentes...' &&
+        sleep 10 &&
+        echo 'Executando testes de integração...' &&
+        python -m pytest tests/integration/ -v --tb=short --maxfail=5
+      "
+    networks:
+      - test-network
+
+volumes:
+  test_postgres_data:
+    driver: local
+  test_redis_data:
+    driver: local
+  test_app_logs:
+    driver: local
+
+networks:
+  test-network:
+    driver: bridge
