@@ -1,0 +1,73 @@
+[run]
+# Configuração de cobertura de código
+
+# Arquivos a serem incluídos na análise
+source = tools
+
+# Arquivos a serem omitidos
+omit = 
+    */tests/*
+    */test_*
+    */__pycache__/*
+    */venv/*
+    */env/*
+    */.venv/*
+    setup.py
+    conftest.py
+
+# Configurações de execução
+branch = True
+parallel = True
+
+[report]
+# Configurações de relatório
+
+# Precisão decimal
+precision = 2
+
+# Mostrar linhas não cobertas
+show_missing = True
+
+# Pular arquivos cobertos completamente
+skip_covered = False
+
+# Pular arquivos vazios
+skip_empty = True
+
+# Ordenação do relatório
+sort = Cover
+
+# Excluir linhas específicas da análise
+exclude_lines =
+    # Linhas padrão a serem excluídas
+    pragma: no cover
+    
+    # Não cobrir definições de métodos abstratos
+    def __repr__
+    if self.debug:
+    
+    # Não cobrir código de debug
+    if settings.DEBUG
+    
+    # Não cobrir raises NotImplementedError
+    raise AssertionError
+    raise NotImplementedError
+    
+    # Não cobrir código que nunca é executado
+    if 0:
+    if __name__ == .__main__.:
+    
+    # Não cobrir imports condicionais
+    if TYPE_CHECKING:
+    
+    # Não cobrir código específico de plataforma
+    if sys.platform
+
+[html]
+# Configurações para relatório HTML
+directory = htmlcov
+title = Code Analyzer - Relatório de Cobertura
+
+[xml]
+# Configurações para relatório XML
+output = coverage.xml
