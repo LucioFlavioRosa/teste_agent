@@ -14,5 +14,3 @@ class FilePromptRepository(IPromptRepository):
                 return f.read()
         except FileNotFoundError as e:
             raise ValueError(f"Arquivo de prompt para a análise '{tipo_analise}' não encontrado em: {caminho_prompt}") from e
-        except Exception as e:
-            raise RuntimeError(f"Erro ao ler o arquivo de prompt: {type(e).__name__}: {e}")
