@@ -1,7 +1,8 @@
-from typing import Protocol, Dict, Any
+from abc import ABC, abstractmethod
+from typing import Dict
+from domain.value_objects.file_filter import FileFilter
 
-class ICodeRepository(Protocol):
-    def fetch_code(self, repo_name: str, filters: Dict[str, Any]) -> Dict[str, str]:
-        ...
-    def is_available(self) -> bool:
-        ...
+class CodeRepository(ABC):
+    @abstractmethod
+    def fetch_files(self, filters: 'FileFilter') -> Dict[str, str]:
+        pass
