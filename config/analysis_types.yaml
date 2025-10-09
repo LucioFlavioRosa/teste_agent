@@ -1,0 +1,12 @@
+design:
+  file_extensions: ['.py']
+  prompt_path: 'tools/prompt/design.md'
+pentest:
+  file_extensions: ['.py']
+  prompt_path: 'tools/prompt/pentest.md'
+seguranca:
+  file_extensions: ['.py']
+  prompt_path: 'tools/prompt/seguranca.md'
+terraform:
+  file_extensions: ['.tf', '.tfvars']
+  prompt_path: 'tools/prompt/terraform.md'
