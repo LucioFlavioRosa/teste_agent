@@ -1,7 +1,6 @@
-from typing import Protocol, List, Dict
+from abc import ABC, abstractmethod
 
-class ILLMProvider(Protocol):
-    def generate_completion(self, messages: List[Dict], model: str, max_tokens: int) -> str:
-        ...
-    def is_configured(self) -> bool:
-        ...
+class LLMProvider(ABC):
+    @abstractmethod
+    def analyze(self, prompt: str, code: str) -> str:
+        pass
