@@ -1,44 +1,23 @@
-import os
-from openai import OpenAI
-from typing import Dict
-from google.colab import userdata
+from infrastructure.llm.openai_client import OpenAIClient
+from infrastructure.config.llm_config import DEFAULT_MODEL, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE
+from domain.services.prompt_loader_service import PromptLoaderService
+from domain.services.analise_orchestrator_service import AnaliseOrchestratorService
+from domain.models.analise_request import AnaliseRequest
+from application.use_cases.executar_analise_use_case import ExecutarAnaliseUseCase
 
-OPENAI_API_KEY = userdata.get('OPENAI_API_KEY')
-if not OPENAI_API_KEY:
-    raise ValueError("A chave da API da OpenAI não foi encontrada. Defina a variável de ambiente OPENAI_API_KEY.")
+openai_client = OpenAIClient()
+prompt_loader_service = PromptLoaderService()
+analise_orchestrator_service = AnaliseOrchestratorService(prompt_loader_service, openai_client)
+executar_analise_use_case = ExecutarAnaliseUseCase(prompt_loader_service, analise_orchestrator_service)
 
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
-
-def carregar_prompt(tipo_analise: str) -> str:
-    caminho_prompt = os.path.join(os.path.dirname(__file__), 'prompts', f'{tipo_analise}.md')
-    try:
-        with open(caminho_prompt, 'r', encoding='utf-8') as f:
-            return f.read()
-    except FileNotFoundError as e:
-        raise ValueError(f"Arquivo de prompt para a análise '{tipo_analise}' não encontrado em: {caminho_prompt}") from e
-
-def executar_analise_llm(
-    tipo_analise: str,
-    codigo: str,
-    analise_extra: str,
-    model_name: str,
-    max_token_out: int
-) -> str:
-    prompt_sistema = carregar_prompt(tipo_analise)
-    mensagens = [
-        {"role": "system", "content": prompt_sistema},
-        {'role': 'user', 'content': codigo},
-        {'role': 'user', 'content': f'Instruções extras do usuário a serem consideradas na análise: {analise_extra}' if analise_extra.strip() else 'Nenhuma instrução extra fornecida pelo usuário.'}
-    ]
-    try:
-        response = openai_client.chat.completions.create(
-            model=model_name,
-            messages=mensagens,
-            temperature=0.5,
-            max_tokens=max_token_out
-        )
-        conteudo_resposta = response.choices[0].message.content.strip()
-        return conteudo_resposta
-    except Exception as e:
-        print(f"ERRO: Falha na chamada à API da OpenAI para análise '{tipo_analise}'. Causa: {type(e).__name__}: {e}")
-        raise RuntimeError(f"Erro ao comunicar com a OpenAI: {type(e).__name__}: {e}") from e
+def executar_analise_llm(tipo_analise, codigo, analise_extra, model_name=DEFAULT_MODEL, max_token_out=DEFAULT_MAX_TOKENS, temperature=DEFAULT_TEMPERATURE):
+    analise_request = AnaliseRequest(
+        tipo_analise=tipo_analise,
+        codigo=codigo,
+        analise_extra=analise_extra,
+        model_name=model_name,
+        max_token_out=max_token_out,
+        temperature=temperature
+    )
+    response = executar_analise_use_case.execute(analise_request)
+    return response.conteudo
