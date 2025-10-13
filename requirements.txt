@@ -1,0 +1,6 @@
+# Dependências do Agent-Vinna
+Flask==2.3.0
+PyGithub==1.59.0
+openai==0.28.0
+python-dotenv==1.0.0
+# Dependências adicionais podem ser incluídas conforme evolução dos módulos agents, infrastructure e tools
