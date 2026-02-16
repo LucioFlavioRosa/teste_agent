@@ -19,7 +19,9 @@ TIPO_EXTENSOES_MAPEAMENTO = {
 
 MAX_RETRIES = 3
 RETRY_DELAY = 2  # segundos
-MAX_PARALLELISM = 4  # Limite para evitar throttling da API
+MAX_PARALLELISM_DEFAULT = 4  # Limite padrão
+MAX_PARALLELISM_MAX = 16     # Limite máximo permitido
+
 
 def conectar_ao_github(repositorio_nome: str):
     try:
@@ -32,14 +34,8 @@ def conectar_ao_github(repositorio_nome: str):
         repositorio = github_client.get_repo(repositorio_nome)
         logging.info(f"Conexão bem-sucedida com o repositório: {repositorio_nome}")
         return repositorio
-    except (ValueError, RuntimeError) as e:
+    except Exception as e:
         logging.error(f"Erro ao conectar ao GitHub para o repositório '{repositorio_nome}': {e}")
-        raise
-    except KeyError as e:
-        logging.error(f"Erro de chave ao conectar ao GitHub: {e}")
-        raise
-    except TypeError as e:
-        logging.error(f"Erro de tipo ao conectar ao GitHub: {e}")
         raise
 
 def arquivo_esta_na_lista_de_extensoes(arquivo_obj, extensoes_alvo: List[str]):
@@ -49,7 +45,7 @@ def arquivo_esta_na_lista_de_extensoes(arquivo_obj, extensoes_alvo: List[str]):
         return True
     return False
 
-def ler_conteudo_arquivo_com_retry(arquivo_obj):
+def ler_conteudo_arquivo_com_retentativas(arquivo_obj):
     for tentativa in range(1, MAX_RETRIES + 1):
         try:
             conteudo_arquivo = arquivo_obj.decoded_content.decode('utf-8')
@@ -77,54 +73,65 @@ def coletar_arquivos_e_diretorios(conteudos, extensoes_alvo: List[str]):
     return arquivos, diretorios
 
 
-def leitura_iterativa_com_paralelismo_e_retry(repo, extensoes_alvo: List[str], caminho_inicial="", max_workers=MAX_PARALLELISM, max_depth: Optional[int]=None):
+def ajustar_paralelismo_dinamico(qtd_arquivos: int) -> int:
+    if qtd_arquivos < 10:
+        return MAX_PARALLELISM_DEFAULT
+    elif qtd_arquivos < 50:
+        return min(MAX_PARALLELISM_DEFAULT * 2, MAX_PARALLELISM_MAX)
+    else:
+        return MAX_PARALLELISM_MAX
+
+
+def ler_arquivos_de_diretorio(repo, caminho, extensoes_alvo, max_workers, profundidade_atual, max_depth):
+    arquivos_do_repo = {}
+    try:
+        conteudos = repo.get_contents(caminho)
+    except Exception as e:
+        logging.error(f"Erro ao obter conteúdo em '{caminho}': {type(e).__name__}: {e}")
+        return arquivos_do_repo, []
+    arquivos, diretorios = coletar_arquivos_e_diretorios(conteudos, extensoes_alvo)
+    max_workers_ajustado = ajustar_paralelismo_dinamico(len(arquivos))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers_ajustado) as executor:
+        futuros = {executor.submit(ler_conteudo_arquivo_com_retentativas, arquivo): arquivo for arquivo in arquivos}
+        for futuro in concurrent.futures.as_completed(futuros):
+            arquivo = futuros[futuro]
+            conteudo = futuro.result()
+            if conteudo is not None:
+                arquivos_do_repo[arquivo.path] = conteudo
+    # Limitação de profundidade
+    if max_depth is not None and profundidade_atual >= max_depth:
+        return arquivos_do_repo, []
+    return arquivos_do_repo, diretorios
+
+
+def leitura_modularizada_com_paralelismo_e_limite(repo, extensoes_alvo: List[str], caminho_inicial="", max_workers=MAX_PARALLELISM_DEFAULT, max_depth: Optional[int]=None):
     """
-    Percorre o repositório de forma iterativa e paraleliza leitura de arquivos e diretórios.
-    Implementa retry para leitura de arquivos e limita paralelismo conforme limites da API.
+    Percorre o repositório de forma iterativa, modularizada e paraleliza leitura de arquivos e diretórios.
+    Implementa retry para leitura de arquivos, ajuste dinâmico de paralelismo e limita profundidade.
     """
     arquivos_do_repo = {}
     caminhos_a_explorar = [(caminho_inicial, 0)]
     while caminhos_a_explorar:
         caminho_atual, profundidade = caminhos_a_explorar.pop()
-        if max_depth is not None and profundidade > max_depth:
-            continue
-        try:
-            conteudos = repo.get_contents(caminho_atual)
-        except Exception as e:
-            logging.error(f"Erro ao obter conteúdo em '{caminho_atual}': {type(e).__name__}: {e}")
-            continue
-        arquivos, diretorios = coletar_arquivos_e_diretorios(conteudos, extensoes_alvo)
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futuros = {executor.submit(ler_conteudo_arquivo_com_retry, arquivo): arquivo for arquivo in arquivos}
-            for futuro in concurrent.futures.as_completed(futuros):
-                arquivo = futuros[futuro]
-                conteudo = futuro.result()
-                if conteudo is not None:
-                    arquivos_do_repo[arquivo.path] = conteudo
+        arquivos_lidos, diretorios = ler_arquivos_de_diretorio(
+            repo, caminho_atual, extensoes_alvo, max_workers, profundidade, max_depth
+        )
+        arquivos_do_repo.update(arquivos_lidos)
         caminhos_a_explorar.extend([(d, profundidade + 1) for d in diretorios])
     return arquivos_do_repo
 
 
-def ler_arquivos_repositorio_github(repositorio_nome: str, tipo_analise: str, max_workers: int = MAX_PARALLELISM, max_depth: Optional[int] = None):
+def ler_arquivos_repositorio_github(repositorio_nome: str, tipo_analise: str, max_workers: int = MAX_PARALLELISM_DEFAULT, max_depth: Optional[int] = None):
     try:
         repositorio = conectar_ao_github(repositorio_nome=repositorio_nome)
         extensoes_alvo = TIPO_EXTENSOES_MAPEAMENTO.get(tipo_analise.lower())
-        arquivos_encontrados = leitura_iterativa_com_paralelismo_e_retry(repositorio, extensoes_alvo, max_workers=max_workers, max_depth=max_depth)
+        arquivos_encontrados = leitura_modularizada_com_paralelismo_e_limite(repositorio, extensoes_alvo, max_workers=max_workers, max_depth=max_depth)
         logging.info(f"Arquivos encontrados para análise '{tipo_analise}': {list(arquivos_encontrados.keys())}")
         return arquivos_encontrados
-    except ValueError as e:
+    except Exception as e:
         logging.error(f"Erro ao ler arquivos do GitHub para análise '{tipo_analise}': {e}")
         raise
-    except RuntimeError as e:
-        logging.error(f"Erro de execução ao ler arquivos do GitHub: {e}")
-        raise
-    except KeyError as e:
-        logging.error(f"Erro de chave ao ler arquivos do GitHub: {e}")
-        raise
-    except TypeError as e:
-        logging.error(f"Erro de tipo ao ler arquivos do GitHub: {e}")
-        raise
 
 
-def obter_arquivos_para_analise(repo_nome: str, tipo_analise: str, max_workers: int = MAX_PARALLELISM, max_depth: Optional[int] = None):
+def obter_arquivos_para_analise(repo_nome: str, tipo_analise: str, max_workers: int = MAX_PARALLELISM_DEFAULT, max_depth: Optional[int] = None):
     return ler_arquivos_repositorio_github(repo_nome, tipo_analise, max_workers=max_workers, max_depth=max_depth)
