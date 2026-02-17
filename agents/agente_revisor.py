@@ -8,6 +8,9 @@ max_tokens_saida = 3000
 
 analises_validas = ["design", "pentest", "seguranca", "terraform"]
 
+# Limites para evitar sobrecarga
+MAX_CODIGO_SIZE_MB = 5  # Tamanho máximo do código em MB
+
 def code_from_repo(repositorio: str,
                    tipo_analise: str):
 
@@ -30,6 +33,12 @@ def validation(tipo_analise: str,
 
   if repositorio is None and codigo is None:
         raise ValueError("Erro: É obrigatório fornecer 'repositorio' ou 'codigo'.")
+
+  # Verificar tamanho do código se fornecido diretamente
+  if codigo is not None and isinstance(codigo, str):
+      codigo_size_mb = len(codigo.encode('utf-8')) / (1024 * 1024)
+      if codigo_size_mb > MAX_CODIGO_SIZE_MB:
+          raise ValueError(f"O código fornecido excede o tamanho máximo permitido ({MAX_CODIGO_SIZE_MB}MB).")
 
   if codigo is None:
     codigo_para_analise = code_from_repo(tipo_analise=tipo_analise,
@@ -64,3 +73,6 @@ def main(tipo_analise: str,
         )
         
     return {"tipo_analise": tipo_analise, "resultado": resultado}
+
+# Alias para manter compatibilidade com código existente
+executar_analise = main
