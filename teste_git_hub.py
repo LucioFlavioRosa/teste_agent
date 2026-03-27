@@ -10,6 +10,8 @@ Original file is located at
 #!pip install PyGithub
 
 from agents import agente_revisor
+import unittest
+from unittest.mock import patch, MagicMock
 
 nome_do_repositorio = "LucioFlavioRosa/agent-vinna"
 
@@ -75,3 +77,17 @@ def index():
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
 
+
+class TestGitHub(unittest.TestCase):
+    @patch('agents.agente_revisor.code_from_repo')
+    def test_rodar_analise_sem_repositorio_ou_codigo(self, mock_code_from_repo):
+        mock_code_from_repo.return_value = {}
+        with app.test_client() as client:
+            response = client.post('/executar_analise', json={
+                'tipo_analise': 'pentest'
+            })
+            self.assertEqual(response.status_code, 400)
+            self.assertIn('É obrigatório fornecer pelo menos um dos parâmetros: \'repositorio\' ou \'codigo\'.', response.json['erro'])
+
+if __name__ == '__main__':
+    unittest.main()
